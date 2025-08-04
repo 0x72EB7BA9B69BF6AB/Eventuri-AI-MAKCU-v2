@@ -9,6 +9,11 @@ This program is intended to be used as a 2pc setup.
 I am not responsible for any account bans, penalties, or any other consequences that may result from using this program.
 Use it at your own risk and be aware of the potential implications.
 
+## Discord
+Join Discord for support 
+https://discord.gg/btJ5RVCjzb
+Join Makcu Discord for Makcu Support
+https://discord.gg/wHqqw5eWV5
 ## Features
 
 Supports YOLOv8–v12 (PyTorch .pt, ONNX .onnx, TensorRT .engine)
