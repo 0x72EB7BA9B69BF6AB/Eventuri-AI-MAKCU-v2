@@ -4,6 +4,10 @@ The ultimate AI aimbot and detection GUI for Windows, supporting YOLOv8–v12 mo
 Made for the MAKCU community, with custom class selection for multiple games and super-smooth, modern UI.
 
 ---
+## Disclamer
+This program is intended to be used as a 2pc setup.
+I am not responsible for any account bans, penalties, or any other consequences that may result from using this program.
+Use it at your own risk and be aware of the potential implications.
 
 ## Features
 
