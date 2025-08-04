@@ -34,9 +34,6 @@ NOTE:
 CUDA support is only for NVIDIA GPUs, and only CUDA 12.6 is supported at this time. If you’re on AMD or Intel GPU, use DirectML mode.
 
 1. Clone the repo
-bash
-Copy
-Edit
 git clone https://github.com/MAKCUAI/Eventuri-AI-MAKCU-v2
 cd Eventuri-AI-MAKCU-v2
 2. Setup for NVIDIA (CUDA 12.6 only)
@@ -47,30 +44,18 @@ Run the CUDA installer and make sure everything is installed properly.
 
 In this folder, run:
 
-bash
-Copy
-Edit
 install_setup_cuda.bat
 When done, start the app:
 
-bash
-Copy
-Edit
 run_eventuri_ai.bat
 3. Setup for DirectML (AMD/Intel/NVIDIA)
 (No special driver install required.)
 
 In this folder, run:
 
-bash
-Copy
-Edit
 install_setup_directml.bat
 When done, start the app:
 
-bash
-Copy
-Edit
 run_eventuri_ai.bat
 DirectML is easiest to install and works with most GPUs, but is typically 5–10% slower than CUDA.
 
