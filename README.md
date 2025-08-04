@@ -44,7 +44,7 @@ cd Eventuri-AI-MAKCU-v2
 ---
 
 2. Setup for NVIDIA (CUDA 12.6 only)
-Only for Nvidia gpus
+
 Download and install CUDA 12.6:
 NVIDIA CUDA 12.6 Download: https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda_12.6.0_560.76_windows.exe
 
@@ -59,7 +59,7 @@ When done, start the app:
 ---
 
 3. Setup for DirectML (AMD/Intel/NVIDIA)
-only for (AMD/Intel) gpus
+
 (No special driver install required.)
 
 In this folder, run:
