@@ -1,0 +1,2 @@
+# Eventuri-AI-MAKCU
+
