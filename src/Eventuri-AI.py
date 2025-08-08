@@ -57,6 +57,8 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.input_check_var = ctk.BooleanVar(value=False)
         self._building = True
         self.fps_var = ctk.StringVar(value="FPS: 0")
+        self._updating_conf = False
+        self._updating_imgsz = False
 
         # Build UI and initialize
         self.build_responsive_ui()
@@ -250,7 +252,16 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         
         controls_frame = ctk.CTkFrame(frame, fg_color="transparent")
         controls_frame.grid(row=1, column=2, padx=15, pady=(0, 15), sticky="e")
-        
+
+        self.capture_mode_var = ctk.StringVar(value=config.capturer_mode.upper())
+        self.capture_mode_menu = ctk.CTkOptionMenu(
+            controls_frame,
+            values=["MSS", "NDI"],
+            variable=self.capture_mode_var,
+            command=self.on_capture_mode_change,
+            width=110
+            )
+        self.capture_mode_menu.pack(side="left", padx=(0, 10))
         self.debug_checkbox = ctk.CTkCheckBox(controls_frame, text="Debug Window", variable=self.debug_checkbox_var, command=self.on_debug_toggle, text_color="#fff")
         self.debug_checkbox.pack(side="left", padx=(0, 10))
         
@@ -270,19 +281,48 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         settings_frame.grid(row=1, column=0, sticky="ew", padx=15, pady=(0, 15))
         settings_frame.grid_columnconfigure(1, weight=1)
         
-        # Confidence
-        ctk.CTkLabel(settings_frame, text="Confidence", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=0, column=0, sticky="w", pady=5)
-        self.conf_slider = ctk.CTkSlider(settings_frame, from_=0.05, to=0.95, number_of_steps=18, command=self.update_conf)
+        # Confidence (row 0)
+        ctk.CTkLabel(settings_frame, text="Confidence", font=("Segoe UI", 12, "bold"), text_color="#fff")\
+            .grid(row=0, column=0, sticky="w", pady=5)
+
+        self.conf_slider = ctk.CTkSlider(
+            settings_frame, from_=0.05, to=0.95, number_of_steps=18, command=self.update_conf
+        )
         self.conf_slider.grid(row=0, column=1, sticky="ew", padx=(10, 5), pady=5)
-        self.conf_value = ctk.CTkLabel(settings_frame, text=f"{config.conf:.2f}", font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
-        self.conf_value.grid(row=0, column=2, pady=5)
+        self.conf_slider.set(config.conf)
+
+        # Manual entry (replaces the old value label)
+        self.conf_entry = ctk.CTkEntry(
+            settings_frame, width=70, justify="center",
+            font=("Segoe UI", 12, "bold"), text_color=NEON
+        )
+        self.conf_entry.grid(row=0, column=2, pady=5)
+        self.conf_entry.insert(0, f"{config.conf:.2f}")
+
+        self.conf_entry.bind("<Return>", self.on_conf_entry_commit)
+        self.conf_entry.bind("<FocusOut>", self.on_conf_entry_commit)
         
-        # Image Size
-        ctk.CTkLabel(settings_frame, text="Resolution", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=1, column=0, sticky="w", pady=5)
-        self.imgsz_slider = ctk.CTkSlider(settings_frame, from_=320, to=1280, number_of_steps=12, command=self.update_imgsz)
+        # Resolution (row 1)
+        ctk.CTkLabel(settings_frame, text="Model Image Size", font=("Segoe UI", 12, "bold"), text_color="#fff")\
+            .grid(row=1, column=0, sticky="w", pady=5)
+
+        self.imgsz_slider = ctk.CTkSlider(
+            settings_frame, from_=128, to=1280, number_of_steps=18, command=self.update_imgsz
+        )
         self.imgsz_slider.grid(row=1, column=1, sticky="ew", padx=(10, 5), pady=5)
-        self.imgsz_value = ctk.CTkLabel(settings_frame, text=str(config.imgsz), font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
-        self.imgsz_value.grid(row=1, column=2, pady=5)
+        self.imgsz_slider.set(config.imgsz)
+
+        # Manual entry (replaces the value label)
+        self.imgsz_entry = ctk.CTkEntry(
+            settings_frame, width=70, justify="center",
+            font=("Segoe UI", 12, "bold"), text_color=NEON
+        )
+        self.imgsz_entry.grid(row=1, column=2, pady=5)
+        self.imgsz_entry.insert(0, str(config.imgsz))
+
+        # Commit on Enter or focus-out
+        self.imgsz_entry.bind("<Return>", self.on_imgsz_entry_commit)
+        self.imgsz_entry.bind("<FocusOut>", self.on_imgsz_entry_commit)
         
         # Max Detections
         ctk.CTkLabel(settings_frame, text="Max Detections", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=2, column=0, sticky="w", pady=5)
@@ -301,9 +341,10 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         preset_buttons.pack(pady=(0, 8))
         
         def set_conf_preset(value):
-            config.conf = value
-            self.conf_slider.set(value)
-            self.conf_value.configure(text=f"{value:.2f}")
+                value = round(float(value), 2)
+                config.conf = value
+                self.conf_slider.set(value)
+                self._set_entry_text(self.conf_entry, f"{value:.2f}")
         
         ctk.CTkButton(preset_buttons, text="Strict (0.8)", command=lambda: set_conf_preset(0.8), width=80, height=25).pack(side="left", padx=2)
         ctk.CTkButton(preset_buttons, text="Normal (0.5)", command=lambda: set_conf_preset(0.5), width=80, height=25).pack(side="left", padx=2)
@@ -322,12 +363,29 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         settings_frame.grid_columnconfigure(1, weight=1)
         
         # FOV Size
-        ctk.CTkLabel(settings_frame, text="FOV Size", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=0, column=0, sticky="w", pady=5)
-        self.fov_slider = ctk.CTkSlider(settings_frame, from_=20, to=500, command=self.update_fov, number_of_steps=180)
+        ctk.CTkLabel(settings_frame, text="FOV Size", font=("Segoe UI", 12, "bold"), text_color="#fff")\
+            .grid(row=0, column=0, sticky="w", pady=5)
+
+        self.fov_slider = ctk.CTkSlider(
+            settings_frame, from_=20, to=500, command=self.update_fov, number_of_steps=180
+        )
         self.fov_slider.grid(row=0, column=1, sticky="ew", padx=(10, 5), pady=5)
-        self.fov_value = ctk.CTkLabel(settings_frame, text=str(config.region_size), font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
-        self.fov_value.grid(row=0, column=2, pady=5)
-        
+
+        # Manual entry box (replaces the label)
+        self.fov_entry = ctk.CTkEntry(
+            settings_frame, width=70, justify="center",
+            font=("Segoe UI", 12, "bold"), text_color=NEON
+        )
+        self.fov_entry.grid(row=0, column=2, pady=5)
+        self.fov_entry.insert(0, str(config.region_size))
+
+        # Commit on Enter or focus-out
+        self.fov_entry.bind("<Return>", self.on_fov_entry_commit)
+        self.fov_entry.bind("<FocusOut>", self.on_fov_entry_commit)
+
+        # guard to avoid feedback loops
+        self._updating_fov = False
+
         # Player Y Offset
         ctk.CTkLabel(settings_frame, text="Y Offset", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=1, column=0, sticky="w", pady=5)
         self.offset_slider = ctk.CTkSlider(settings_frame, from_=0, to=20, command=self.update_offset, number_of_steps=20)
@@ -336,7 +394,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.offset_value.grid(row=1, column=2, pady=5)
         
         # Sensitivity
-        ctk.CTkLabel(settings_frame, text="Sensitivity", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=2, column=0, sticky="w", pady=5)
+        ctk.CTkLabel(settings_frame, text="Smoothing", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=2, column=0, sticky="w", pady=5)
         self.in_game_sens_slider = ctk.CTkSlider(settings_frame, from_=0.1, to=8, number_of_steps=79, command=self.update_in_game_sens)
         self.in_game_sens_slider.grid(row=2, column=1, sticky="ew", padx=(10, 5), pady=5)
         self.in_game_sens_value = ctk.CTkLabel(settings_frame, text=f"{config.in_game_sens:.2f}", font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
@@ -542,7 +600,8 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
     # Include all the callback methods from gui_callbacks.py
     def refresh_all(self):
         self.fov_slider.set(config.region_size)
-        self.fov_value.configure(text=str(config.region_size))
+        # update entry text safely
+        self._set_entry_text(self.fov_entry, str(config.region_size))
         self.offset_slider.set(config.player_y_offset)
         self.offset_value.configure(text=str(config.player_y_offset))
         self.btn_var.set(config.selected_mouse_button)
@@ -552,21 +611,53 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.model_size.set(get_model_size(config.model_path))
         self.aimbot_status.set("Running" if is_aimbot_running() else "Stopped")
         self.conf_slider.set(config.conf)
-        self.conf_value.configure(text=f"{config.conf:.2f}")
+        self._set_entry_text(self.conf_entry, f"{config.conf:.2f}")
         self.in_game_sens_slider.set(config.in_game_sens)
         self.in_game_sens_value.configure(text=f"{config.in_game_sens:.2f}")
         self.imgsz_slider.set(config.imgsz)
-        self.imgsz_value.configure(text=str(config.imgsz))
+        self._set_entry_text(self.imgsz_entry, str(config.imgsz))
         self.max_detect_slider.set(config.max_detect)
         self.max_detect_label.configure(text=str(config.max_detect))
         self.load_class_list()
         self.update_dynamic_frame()
         self.debug_checkbox_var.set(config.show_debug_window)
         self.input_check_var.set(False)
+        self.capture_mode_var.set(config.capturer_mode.upper())
+        self.capture_mode_menu.set(config.capturer_mode.upper())
+
 
     def update_fov(self, val):
-        config.region_size = int(round(val))
-        self.fov_value.configure(text=str(config.region_size))
+        """Called by the slider."""
+        if self._updating_fov:
+            return
+        self._apply_fov(int(round(val)), source="slider")
+
+    def on_fov_entry_commit(self, event=None):
+        """Called when user presses Enter or leaves the entry."""
+        try:
+            val = int(self.fov_entry.get().strip())
+        except Exception:
+            # revert to current config if invalid
+            self._set_entry_text(self.fov_entry, str(config.region_size))
+            return
+        self._apply_fov(val, source="entry")
+
+    def _apply_fov(self, value, source="code"):
+        MIN_FOV, MAX_FOV = 20, 500
+        value = max(MIN_FOV, min(MAX_FOV, int(value)))
+
+        # prevent recursion loops
+        self._updating_fov = True
+        try:
+            config.region_size = value
+            # keep slider and entry in sync
+            if source != "slider":
+                self.fov_slider.set(value)
+            if source != "entry":
+                self._set_entry_text(self.fov_entry, str(value))
+        finally:
+            self._updating_fov = False
+
 
     def update_offset(self, val):
         config.player_y_offset = int(round(val))
@@ -580,12 +671,96 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.update_dynamic_frame()
 
     def update_conf(self, val):
-        config.conf = round(float(val), 2)
-        self.conf_value.configure(text=f"{config.conf:.2f}")
+        """Called by the slider."""
+        if getattr(self, "_updating_conf", False):
+            return
+        self._apply_conf(float(val), source="slider")
+
+    def on_conf_entry_commit(self, event=None):
+        """Called when user presses Enter or leaves the entry."""
+        raw = self.conf_entry.get().strip()
+        # allow ".3" style
+        if raw.startswith("."):
+            raw = "0" + raw
+        try:
+            val = float(raw)
+        except Exception:
+            # revert to current config if invalid
+            self._set_entry_text(self.conf_entry, f"{config.conf:.2f}")
+            return
+        self._apply_conf(val, source="entry")
+
+    def _apply_conf(self, value, source="code"):
+        MIN_C, MAX_C = 0.05, 0.95
+        # clamp and round to 2 decimals
+        value = max(MIN_C, min(MAX_C, float(value)))
+        value = round(value, 2)
+
+        self._updating_conf = True
+        try:
+            config.conf = value
+            # keep slider and entry in sync
+            if source != "slider":
+                self.conf_slider.set(value)
+            if source != "entry":
+                self._set_entry_text(self.conf_entry, f"{value:.2f}")
+        finally:
+            self._updating_conf = False
+
+    def _set_entry_text(self, entry, text):
+        entry.delete(0, "end")
+        entry.insert(0, text)
+
+    def on_capture_mode_change(self, value: str):
+        m = {"MSS": "mss", "NDI": "ndi"}
+        internal = m.get((value or "").upper(), "mss")
+        if config.capturer_mode != internal:
+            config.capturer_mode = internal
+            self.error_text.set(f"🔁 Capture method set to: {value}")
+            if is_aimbot_running():
+                stop_aimbot(); start_aimbot()
 
     def update_imgsz(self, val):
-        config.imgsz = int(round(val))
-        self.imgsz_value.configure(text=str(config.imgsz))
+        """Called by the slider."""
+        if self._updating_imgsz:
+            return
+        self._apply_imgsz(int(round(float(val))), source="slider")
+
+    def on_imgsz_entry_commit(self, event=None):
+        """Called when user presses Enter or leaves the entry."""
+        raw = self.imgsz_entry.get().strip()
+        try:
+            val = int(raw)
+        except Exception:
+            # revert to current config if invalid
+            self._set_entry_text(self.imgsz_entry, str(config.imgsz))
+            return
+        self._apply_imgsz(val, source="entry")
+
+    def _snap_to_multiple(self, value, base=32):
+        """Snap to nearest multiple of 'base' (YOLO-friendly)."""
+        if base <= 1:
+            return value
+        down = (value // base) * base
+        up = down + base
+        # choose nearest; prefer 'up' on ties
+        return up if (value - down) >= (up - value) else down
+
+    def _apply_imgsz(self, value, source="code"):
+        MIN_S, MAX_S = 320, 1280
+        value = max(MIN_S, min(MAX_S, int(value)))
+        value = self._snap_to_multiple(value, base=32)
+
+        self._updating_imgsz = True
+        try:
+            config.imgsz = value
+            # keep slider and entry in sync
+            if source != "slider":
+                self.imgsz_slider.set(value)
+            if source != "entry":
+                self._set_entry_text(self.imgsz_entry, str(value))
+        finally:
+            self._updating_imgsz = False
 
     def update_max_detect(self, val):
         val = int(round(float(val)))

@@ -84,14 +84,10 @@ def detection_and_aim_loop():
     model, class_names = load_model(config.model_path)
     # makcu is already initialized in start_aimbot
 
-    region_left = (config.screen_width - config.region_size) // 2
-    region_top  = (config.screen_height - config.region_size) // 2
-    crosshair_x = config.screen_width // 2
-    crosshair_y = config.screen_height // 2
 
     frame_count = 0
     start_time = time.perf_counter()  # Use a more precise clock
-
+    debug_window_moved = False  # Track if debug window has been moved
 
     while _aimbot_running:
         try:
@@ -99,8 +95,20 @@ def detection_and_aim_loop():
         except queue.Empty:
             print("[WARN] Frame queue is empty. Capture thread may have stalled.")
             continue
-
+        if config.capturer_mode.lower() == "mss":
+            region_left = (config.screen_width - config.region_size) // 2
+            region_top  = (config.screen_height - config.region_size) // 2
+            crosshair_x = config.screen_width // 2
+            crosshair_y = config.screen_height // 2
+        else:
+            region_left = (config.screen_width - config.ndi_widht) // 2
+            region_top  = (config.screen_height - config.ndi_height) // 2
+            crosshair_x = config.screen_width // 2
+            crosshair_y = config.screen_height // 2
+        
         all_targets = []
+        if config.capturer_mode.lower() == "ndi":
+            image = cv2.resize(image, (config.ndi_widht, config.ndi_height))
         debug_image = image.copy() if config.show_debug_window else None
         detected_classes = set()  # Track what classes are being detected
 
@@ -175,7 +183,10 @@ def detection_and_aim_loop():
                             center_y = y1 + config.player_y_offset
 
                         # Calculate distance from crosshair
-                        dist = math.hypot(center_x - (config.region_size / 2), center_y - (config.region_size / 2))
+                        if config.capturer_mode.lower() == "mss":
+                            dist = math.hypot(center_x - (config.region_size / 2), center_y - (config.region_size / 2))
+                        else:
+                            dist = math.hypot(center_x - (config.ndi_widht / 2), center_y - (config.ndi_height / 2))
                         all_targets.append({
                             'dist': dist, 
                             'center_x': center_x, 
@@ -221,13 +232,13 @@ def detection_and_aim_loop():
             # Apply im-game-sensitivity scaling
             sens = config.in_game_sens
             distance = 1.07437623 * math.pow(sens, -0.9936827126)
+            # Apply distance scaling
+            dx *= distance
+            dy *= distance
 
 
            
             if config.mode == "normal":
-                # Apply distances scaling
-                dx *= distance
-                dy *= distance
                 # Apply x,y speeds scaling
                 dx *= config.normal_x_speed
                 dy *= config.normal_y_speed
@@ -275,40 +286,51 @@ def detection_and_aim_loop():
 
         # --- Debug Window Display ---
         if debug_image is not None:
-            # Add status overlay to debug window
+            # Add overlays (same as before)
             button_held = is_button_pressed(config.selected_mouse_button)
             status_text = f"Button {config.selected_mouse_button}: {'HELD' if button_held else 'released'}"
             color = (0, 255, 0) if button_held else (0, 0, 255)
             cv2.putText(debug_image, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-            # Show target count and detected classes
             target_text = f"Targets: {len(all_targets)} | Detected: {len(detected_classes)} classes"
             cv2.putText(debug_image, target_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-            # Show current target settings
             settings_text = f"Looking for: '{config.custom_player_label}', '{config.custom_head_label}'"
             cv2.putText(debug_image, settings_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-            # Show current mode
             mode_text = f"Mode: {config.mode.upper()}"
             cv2.putText(debug_image, mode_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
 
-            # Show smooth aim queue status
             if config.mode == "smooth":
                 queue_text = f"Smooth Queue: {smooth_move_queue.qsize()}/10"
                 cv2.putText(debug_image, queue_text, (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-            # List detected classes at bottom
             if detected_classes:
                 classes_text = f"Classes: {', '.join(sorted(detected_classes))}"
                 cv2.putText(debug_image, classes_text, (10, debug_image.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
 
             # Draw crosshair
-            center = (config.region_size // 2, config.region_size // 2)
+            if config.capturer_mode.lower() == "mss":
+                center = (config.region_size // 2, config.region_size // 2)
+            else:
+                center = (config.ndi_widht // 2, config.ndi_height // 2)
+
             cv2.drawMarker(debug_image, center, (255, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
-            cv2.imshow("AI Debug", debug_image)
+            # Show window in center of screen
+            win_name = "AI Debug"
+            cv2.imshow(win_name, debug_image)
+
+            # Calculate center position
+            if not debug_window_moved:
+                screen_w, screen_h = config.screen_width, config.screen_height
+                win_w, win_h = debug_image.shape[1], debug_image.shape[0]
+                x = (screen_w - win_w) // 2
+                y = (screen_h - win_h) // 2
+                cv2.moveWindow(win_name, x, y)
+                debug_window_moved = True 
             cv2.waitKey(1)
+
 
         # --- FPS Calculation ---
         frame_count += 1

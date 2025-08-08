@@ -51,6 +51,10 @@ patches = [
                 "replacement": 'providers = ["DmlExecutionProvider", "CPUExecutionProvider"]'
             },
             {
+                "pattern": 'LOGGER.warning("Failed to start ONNX Runtime with CUDA. Using CPU...")',
+                "replacement": 'LOGGER.info("Using Directml For ONNX Runtime")'
+            },
+            {
                 "pattern": 'session = onnxruntime.InferenceSession(w, session_options, providers=["CPUExecutionProvider"])',
                 "replacement": 'session = onnxruntime.InferenceSession(w, session_options, providers=["DmlExecutionProvider", "CPUExecutionProvider"])'
             },

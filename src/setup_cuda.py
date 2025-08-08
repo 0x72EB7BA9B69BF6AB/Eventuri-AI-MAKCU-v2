@@ -38,7 +38,7 @@ else:
     # Step 2: Install remaining packages
     packages = [
         "customtkinter", "opencv-python", "pyserial", "mss", "ultralytics",
-        "tensorrt==10.11.0.33", "onnx", "onnxruntime-directml"
+        "tensorrt==10.11.0.33", "onnx", "onnxruntime-directml", "cyndilib"
     ]
     print(f"[*] {REQUIREMENTS} not found. Installing default packages: {packages}")
     subprocess.check_call([venv_python, "-m", "pip", "install"] + packages)

@@ -333,7 +333,7 @@ class GUISections:
         
         # Speed settings
         ctk.CTkLabel(f, text="Close Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=3, column=0, sticky="w", padx=6)
-        close_speed_slider = ctk.CTkSlider(f, from_=0.1, to=1.0, number_of_steps=18)
+        close_speed_slider = ctk.CTkSlider(f, from_=0.1, to=2.0, number_of_steps=36)
         close_speed_slider.set(config.smooth_close_speed)
         close_speed_slider.grid(row=3, column=1, padx=2, sticky="ew")
         close_speed_label = ctk.CTkLabel(f, text=f"{config.smooth_close_speed:.2f}", text_color="#ff5555", width=40)
@@ -344,7 +344,7 @@ class GUISections:
         close_speed_slider.configure(command=update_close_speed)
         
         ctk.CTkLabel(f, text="Far Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=4, column=0, sticky="w", padx=6)
-        far_speed_slider = ctk.CTkSlider(f, from_=0.1, to=1.0, number_of_steps=18)
+        far_speed_slider = ctk.CTkSlider(f, from_=0.1, to=2.0, number_of_steps=36)
         far_speed_slider.set(config.smooth_far_speed)
         far_speed_slider.grid(row=4, column=1, padx=2, sticky="ew")
         far_speed_label = ctk.CTkLabel(f, text=f"{config.smooth_far_speed:.2f}", text_color="#ff5555", width=40)
