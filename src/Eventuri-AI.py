@@ -243,15 +243,24 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
         frame.grid_columnconfigure(1, weight=1)
         
-        ctk.CTkLabel(frame, text="🔌 Device Controls", font=("Segoe UI", 16, "bold"), text_color="#00e676").grid(row=0, column=0, columnspan=3, pady=(15, 10), padx=15, sticky="w")
+        ctk.CTkLabel(frame, text="🔌 Device/Capture Controls", font=("Segoe UI", 16, "bold"), text_color="#00e676").grid(row=0, column=0, columnspan=3, pady=(15, 10), padx=15, sticky="w")
         
         self.connect_btn = neon_button(frame, text="Connect to MAKCU", command=self.on_connect, width=150, height=35)
         self.connect_btn.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
         
         ctk.CTkButton(frame, text="Test Move", command=test_move, width=100, height=35, fg_color="#333", hover_color="#555").grid(row=1, column=1, padx=10, pady=(0, 15), sticky="w")
         
+
         controls_frame = ctk.CTkFrame(frame, fg_color="transparent")
         controls_frame.grid(row=1, column=2, padx=15, pady=(0, 15), sticky="e")
+
+
+        ctk.CTkLabel(
+            controls_frame,
+            text="Capture Method:",
+            font=("Segoe UI", 14),
+            text_color="#ffffff"
+        ).pack(side="left", padx=(0, 8))
 
         self.capture_mode_var = ctk.StringVar(value=config.capturer_mode.upper())
         self.capture_mode_menu = ctk.CTkOptionMenu(
@@ -260,8 +269,9 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             variable=self.capture_mode_var,
             command=self.on_capture_mode_change,
             width=110
-            )
+        )
         self.capture_mode_menu.pack(side="left", padx=(0, 10))
+
         self.debug_checkbox = ctk.CTkCheckBox(controls_frame, text="Debug Window", variable=self.debug_checkbox_var, command=self.on_debug_toggle, text_color="#fff")
         self.debug_checkbox.pack(side="left", padx=(0, 10))
         
