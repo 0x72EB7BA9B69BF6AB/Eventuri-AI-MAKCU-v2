@@ -25,9 +25,9 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         
-        # Set initial size (80% of screen)
-        initial_width = int(screen_width * 0.7)
-        initial_height = int(screen_height * 0.7)
+        # Set initial size (90% of screen)
+        initial_width = int(screen_width * 0.9)
+        initial_height = int(screen_height * 0.9)
         
         # Center the window
         x = (screen_width - initial_width) // 2
@@ -55,10 +55,16 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.aim_humanize_var = ctk.BooleanVar(value=bool(config.aim_humanization))
         self.debug_checkbox_var = ctk.BooleanVar(value=False)
         self.input_check_var = ctk.BooleanVar(value=False)
+        self.button_mask_var = ctk.BooleanVar(value=bool(getattr(config, "button_mask", False)))
         self._building = True
         self.fps_var = ctk.StringVar(value="FPS: 0")
         self._updating_conf = False
         self._updating_imgsz = False
+        self.always_on_var = ctk.BooleanVar(value=bool(getattr(config, "always_on_aim", False)))
+        self.trigger_enabled_var   = ctk.BooleanVar(value=bool(getattr(config, "trigger_enabled", False)))
+        self.trigger_always_on_var = ctk.BooleanVar(value=bool(getattr(config, "trigger_always_on", False)))
+        self.trigger_btn_var       = ctk.IntVar(value=int(getattr(config, "trigger_button", 0)))
+
 
         # Build UI and initialize
         self.build_responsive_ui()
@@ -194,26 +200,14 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.error_frame.grid_columnconfigure(0, weight=1)
 
     def build_left_column(self):
-        """Build left column content"""
         row = 0
-        
-        # Device Controls
-        self.build_device_controls(self.left_column, row)
-        row += 1
-        
-        # Detection Settings
-        self.build_detection_settings(self.left_column, row)
-        row += 1
-        
-        # Aim Settings
-        self.build_aim_settings(self.left_column, row)
-        row += 1
-        
-        # Aimbot Mode
-        self.build_aimbot_mode(self.left_column, row)
-        row += 1
-        
-        # Dynamic settings frame
+        self.build_device_controls(self.left_column, row); row += 1
+        # NEW:
+        self.build_capture_controls(self.left_column, row); row += 1
+        # Detection, Aim, Mode, Dynamic, etc. follow:
+        self.build_detection_settings(self.left_column, row); row += 1
+        self.build_aim_settings(self.left_column, row); row += 1
+        self.build_aimbot_mode(self.left_column, row); row += 1
         self.dynamic_frame = ctk.CTkFrame(self.left_column, fg_color=BG)
         self.dynamic_frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
         self.dynamic_frame.grid_columnconfigure(0, weight=1)
@@ -229,7 +223,10 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         # Class Selection
         self.build_class_selection(self.right_column, row)
         row += 1
-        
+
+        # Triggerbot section here
+        self.build_triggerbot_settings(self.right_column, row); row += 1
+
         # Profile Controls
         self.build_profile_controls(self.right_column, row)
         row += 1
@@ -238,45 +235,331 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.build_main_controls(self.right_column, row)
 
     def build_device_controls(self, parent, row):
-        """Device connection and testing controls"""
+        """MAKCU device controls (top section)"""
         frame = ctk.CTkFrame(parent, fg_color="#1a1a1a")
         frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
         frame.grid_columnconfigure(1, weight=1)
-        
-        ctk.CTkLabel(frame, text="🔌 Device/Capture Controls", font=("Segoe UI", 16, "bold"), text_color="#00e676").grid(row=0, column=0, columnspan=3, pady=(15, 10), padx=15, sticky="w")
-        
+
+        ctk.CTkLabel(frame, text="🔌 Device Controls", font=("Segoe UI", 16, "bold"),
+                    text_color="#00e676").grid(row=0, column=0, columnspan=3, pady=(15, 10), padx=15, sticky="w")
+
         self.connect_btn = neon_button(frame, text="Connect to MAKCU", command=self.on_connect, width=150, height=35)
         self.connect_btn.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="w")
+
+        ctk.CTkButton(frame, text="Test Move", command=test_move, width=100, height=35,
+                    fg_color="#333", hover_color="#555").grid(row=1, column=1, padx=10, pady=(0, 15), sticky="w")
         
-        ctk.CTkButton(frame, text="Test Move", command=test_move, width=100, height=35, fg_color="#333", hover_color="#555").grid(row=1, column=1, padx=10, pady=(0, 15), sticky="w")
+        self.input_check_checkbox = ctk.CTkCheckBox(
+            frame, text="Input Monitor", variable=self.input_check_var,
+            command=self.on_input_check_toggle, text_color="#fff"
+        )
+        self.input_check_checkbox.grid(row=1, column=2, padx=15, pady=(0, 15), sticky="w")
+
+        self.button_mask_switch = ctk.CTkSwitch(
+        frame,
+        text="Button Masking",
+        variable=self.button_mask_var,
+        command=self.on_button_mask_toggle,
+        text_color="#fff"
+    )
+        self.button_mask_switch.grid(row=1, column=3, padx=15, pady=(0, 15), sticky="w")
+        
         
 
-        controls_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        controls_frame.grid(row=1, column=2, padx=15, pady=(0, 15), sticky="e")
 
+    def build_capture_controls(self, parent, row):
+        """Capture controls (bottom section): capture method + NDI source + toggles"""
+        frame = ctk.CTkFrame(parent, fg_color="#1a1a1a")
+        frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        frame.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(
-            controls_frame,
-            text="Capture Method:",
-            font=("Segoe UI", 14),
-            text_color="#ffffff"
-        ).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(frame, text="📷 Capture Controls", font=("Segoe UI", 16, "bold"),
+                    text_color="#00e676").grid(row=0, column=0, columnspan=4, pady=(15, 10), padx=15, sticky="w")
 
+        # Capture Method
+        ctk.CTkLabel(frame, text="Capture Method:", font=("Segoe UI", 14), text_color="#ffffff")\
+            .grid(row=1, column=0, sticky="w", padx=15)
         self.capture_mode_var = ctk.StringVar(value=config.capturer_mode.upper())
         self.capture_mode_menu = ctk.CTkOptionMenu(
-            controls_frame,
-            values=["MSS", "NDI"],
-            variable=self.capture_mode_var,
-            command=self.on_capture_mode_change,
-            width=110
+            frame, values=["MSS", "NDI"], variable=self.capture_mode_var,
+            command=self.on_capture_mode_change, width=110
         )
-        self.capture_mode_menu.pack(side="left", padx=(0, 10))
+        self.capture_mode_menu.grid(row=1, column=1, sticky="w", padx=(5, 15), pady=10)
 
-        self.debug_checkbox = ctk.CTkCheckBox(controls_frame, text="Debug Window", variable=self.debug_checkbox_var, command=self.on_debug_toggle, text_color="#fff")
-        self.debug_checkbox.pack(side="left", padx=(0, 10))
-        
-        self.input_check_checkbox = ctk.CTkCheckBox(controls_frame, text="Input Monitor", variable=self.input_check_var, command=self.on_input_check_toggle, text_color="#fff")
-        self.input_check_checkbox.pack(side="left")
+        # --- NDI-only block (shown only when capture mode = NDI) ---
+        self.ndi_block = ctk.CTkFrame(frame, fg_color="transparent")
+        # we'll grid/place this in _update_ndi_controls_state()
+        # internal grid for the block
+        self.ndi_block.grid_columnconfigure(1, weight=1)
+
+        # NDI Source dropdown (auto-refreshing)
+        ctk.CTkLabel(self.ndi_block, text="NDI Source:", font=("Segoe UI", 14), text_color="#ffffff")\
+            .grid(row=0, column=0, sticky="w", padx=15)
+        self.ndi_source_var = ctk.StringVar(value=self._initial_ndi_source_value())
+        self.ndi_source_menu = ctk.CTkOptionMenu(
+            self.ndi_block,
+            values=self._ndi_menu_values(),
+            variable=self.ndi_source_var,
+            command=self.on_ndi_source_change,
+            width=260
+        )
+        self.ndi_source_menu.grid(row=0, column=1, sticky="w", padx=(5, 15), pady=(0, 8))
+
+        # Main PC Resolution (width × height)
+        ctk.CTkLabel(self.ndi_block, text="Main PC Resolution:", font=("Segoe UI", 14), text_color="#ffffff")\
+            .grid(row=1, column=0, sticky="w", padx=15, pady=(0, 10))
+
+        res_wrap = ctk.CTkFrame(self.ndi_block, fg_color="transparent")
+        res_wrap.grid(row=1, column=1, sticky="w", padx=(5, 15), pady=(0, 10))
+
+        self.main_res_w_entry = ctk.CTkEntry(res_wrap, width=90, justify="center")
+        self.main_res_w_entry.pack(side="left")
+        self.main_res_w_entry.insert(0, str(getattr(config, "main_pc_width", 1920)))
+
+        ctk.CTkLabel(res_wrap, text=" × ", font=("Segoe UI", 14), text_color="#ffffff")\
+            .pack(side="left", padx=6)
+
+        self.main_res_h_entry = ctk.CTkEntry(res_wrap, width=90, justify="center")
+        self.main_res_h_entry.pack(side="left")
+        self.main_res_h_entry.insert(0, str(getattr(config, "main_pc_height", 1080)))
+
+        def _commit_main_res(event=None):
+            try:
+                w = int(self.main_res_w_entry.get().strip())
+                h = int(self.main_res_h_entry.get().strip())
+                w = max(320, min(7680, w))
+                h = max(240, min(4320, h))
+                config.main_pc_width = w
+                config.main_pc_height = h
+                self.main_res_w_entry.delete(0, "end"); self.main_res_w_entry.insert(0, str(w))
+                self.main_res_h_entry.delete(0, "end"); self.main_res_h_entry.insert(0, str(h))
+                if hasattr(config, "save") and callable(config.save):
+                    config.save()
+            except Exception:
+                self.main_res_w_entry.delete(0, "end"); self.main_res_w_entry.insert(0, str(getattr(config, "main_pc_width", 1920)))
+                self.main_res_h_entry.delete(0, "end"); self.main_res_h_entry.insert(0, str(getattr(config, "main_pc_height", 1080)))
+
+        self.main_res_w_entry.bind("<Return>", _commit_main_res)
+        self.main_res_h_entry.bind("<Return>", _commit_main_res)
+        self.main_res_w_entry.bind("<FocusOut>", _commit_main_res)
+        self.main_res_h_entry.bind("<FocusOut>", _commit_main_res)
+
+        # Toggles
+        self.debug_checkbox = ctk.CTkCheckBox(
+            frame, text="Debug Window", variable=self.debug_checkbox_var,
+            command=self.on_debug_toggle, text_color="#fff"
+        )
+        self.debug_checkbox.grid(row=4, column=0, sticky="w", padx=15, pady=(5, 15))
+
+        # Initial enable/disable state
+        self._update_ndi_controls_state()
+
+        # Start polling for source list updates
+        self.after(1000, self._poll_ndi_sources)
+
+    def _ndi_menu_values(self):
+        # Show something friendly when empty
+        return config.ndi_sources if config.ndi_sources else ["(no NDI sources found)"]
+
+    def _initial_ndi_source_value(self):
+        # If we have a persisted selection and it still exists, use it; else first
+        sel = config.ndi_selected_source
+        if isinstance(sel, str) and sel in config.ndi_sources:
+            return sel
+        # fallbacks
+        return config.ndi_sources[0] if config.ndi_sources else "(no NDI sources found)"
+
+    def _update_ndi_controls_state(self):
+        is_ndi = (self.capture_mode_var.get().upper() == "NDI")
+
+        # Show/hide the whole NDI block
+        try:
+            if is_ndi:
+                self.ndi_block.grid(row=2, column=0, columnspan=2, sticky="ew")
+            else:
+                self.ndi_block.grid_remove()
+        except Exception:
+            pass
+
+        # Enable/disable internal controls just in case
+        try:
+            state = "normal" if is_ndi else "disabled"
+            self.ndi_source_menu.configure(state=state)
+            self.main_res_w_entry.configure(state=state)
+            self.main_res_h_entry.configure(state=state)
+        except Exception:
+            pass
+
+        try:
+            self.debug_checkbox.grid_configure(row=4 if is_ndi else 2)
+        except Exception:
+            pass
+
+    def _poll_ndi_sources(self):
+        latest = list(config.ndi_sources) if isinstance(config.ndi_sources, list) else []
+
+        # 1) Always push the latest values into the menu
+        if not latest:
+            latest = ["(Start Aimbot to find avalible NDI sources)"]
+
+        try:
+            self.ndi_source_menu.configure(values=latest)
+        except Exception:
+            # widget not ready yet, try again next tick
+            self.after(1000, self._poll_ndi_sources)
+            return
+
+        # 2) Keep the selection sensible
+        current = self.ndi_source_var.get()
+        if current not in latest:
+            # Prefer persisted selection if still present
+            if isinstance(config.ndi_selected_source, str) and config.ndi_selected_source in latest:
+                choice = config.ndi_selected_source
+            else:
+                choice = latest[0]
+
+            # Update both the variable and the widget
+            self.ndi_source_var.set(choice)
+            try:
+                self.ndi_source_menu.set(choice)
+            except Exception:
+                pass
+
+            if self.capture_mode_var.get().upper() == "NDI" and not choice.startswith("("):
+                config.ndi_selected_source = choice
+                config.save()
+
+        self._update_ndi_controls_state()
+
+        # tick again
+        self.after(1000, self._poll_ndi_sources)
+    
+    
+    def build_triggerbot_settings(self, parent, row):
+        """Standalone Triggerbot section (right column)."""
+        frame = ctk.CTkFrame(parent, fg_color="#1a1a1a")
+        frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(frame, text="🧨 Triggerbot", font=("Segoe UI", 16, "bold"),
+                    text_color="#00e676").grid(row=0, column=0, columnspan=2,
+                                                pady=(15, 10), padx=15, sticky="w")
+
+        # --- toggles
+        toggles = ctk.CTkFrame(frame, fg_color="transparent")
+        toggles.grid(row=1, column=0, columnspan=2, sticky="ew", padx=15, pady=(0, 10))
+        toggles.grid_columnconfigure(1, weight=1)
+
+        def _on_enabled_then_focus():
+            self.on_trigger_enabled_toggle()
+            if self.trigger_enabled_var.get():
+                try:
+                    self.tb_radius_entry.focus_set()
+                    self.tb_radius_entry.select_range(0, "end")
+                except Exception:
+                    pass
+
+        ctk.CTkSwitch(toggles, text="Enabled", text_color="#fff",
+                    variable=self.trigger_enabled_var,
+                    command=_on_enabled_then_focus).pack(side="left", padx=(0, 15))
+
+        ctk.CTkSwitch(toggles, text="Always on", text_color="#fff",
+                    variable=self.trigger_always_on_var,
+                    command=self.on_trigger_always_on_toggle).pack(side="left")
+
+        # --- hotkey row
+        ctk.CTkLabel(frame, text="Trigger Key:", font=("Segoe UI", 12, "bold"),
+                    text_color="#fff").grid(row=2, column=0, sticky="w", padx=15, pady=(0, 8))
+        btns = ctk.CTkFrame(frame, fg_color="transparent")
+        btns.grid(row=2, column=1, sticky="w", padx=15, pady=(0, 8))
+        for i, txt in enumerate(["Left", "Right", "Middle", "Side 4", "Side 5"]):
+            ctk.CTkRadioButton(btns, text=txt, variable=self.trigger_btn_var, value=i,
+                            command=self.update_trigger_button, text_color="#fff").pack(side="left", padx=8)
+
+        # --- params
+        params = ctk.CTkFrame(frame, fg_color="#2a2a2a", corner_radius=10)
+        params.grid(row=3, column=0, columnspan=2, sticky="ew", padx=15, pady=(5, 15))
+        params.grid_columnconfigure((1,3,5,7), weight=1)
+
+        # validators
+        v_int   = self.register(lambda s: (s == "") or s.isdigit())
+        def _is_float(s):
+            if s == "" or s == ".": return True
+            try: float(s); return True
+            except: return False
+        v_float = self.register(_is_float)
+
+        def _entry(parent, value, width=80, vcmd=None):
+            e = ctk.CTkEntry(parent, width=width, justify="center",
+                            font=("Segoe UI", 12, "bold"), text_color=NEON)
+            e.insert(0, value)
+            if vcmd is not None:
+                # validate on keypress
+                e.configure(validate="key", validatecommand=(vcmd, "%P"))
+            return e
+
+        ctk.CTkLabel(params, text="Radius(px)", font=("Segoe UI", 12, "bold"),
+                    text_color="#fff").grid(row=0, column=0, padx=(10,6), pady=10, sticky="w")
+        self.tb_radius_entry = _entry(params, str(getattr(config, "trigger_radius_px", 8)),
+                                    vcmd=v_int);  self.tb_radius_entry.grid(row=0, column=1, sticky="w")
+
+        ctk.CTkLabel(params, text="Delay(ms)", font=("Segoe UI", 12, "bold"),
+                    text_color="#fff").grid(row=0, column=2, padx=(16,6), pady=10, sticky="w")
+        self.tb_delay_entry  = _entry(params, str(getattr(config, "trigger_delay_ms", 30)),
+                                    vcmd=v_int);  self.tb_delay_entry.grid(row=0, column=3, sticky="w")
+
+        ctk.CTkLabel(params, text="Cooldown(ms)", font=("Segoe UI", 12, "bold"),
+                    text_color="#fff").grid(row=0, column=4, padx=(16,6), pady=10, sticky="w")
+        self.tb_cd_entry     = _entry(params, str(getattr(config, "trigger_cooldown_ms", 120)),
+                                    vcmd=v_int); self.tb_cd_entry.grid(row=0, column=5, sticky="w")
+
+        ctk.CTkLabel(params, text="Min conf", font=("Segoe UI", 12, "bold"),
+                    text_color="#fff").grid(row=0, column=6, padx=(16,6), pady=10, sticky="w")
+        self.tb_conf_entry   = _entry(params, f"{getattr(config, 'trigger_min_conf', 0.35):.2f}",
+                                    vcmd=v_float); self.tb_conf_entry.grid(row=0, column=7, sticky="w")
+
+        def _commit_tb_numbers(event=None):
+            try:
+                # ints
+                r  = int(self.tb_radius_entry.get() or 0)
+                d  = int(self.tb_delay_entry.get() or 0)
+                cd = int(self.tb_cd_entry.get() or 0)
+                # float
+                cf = float(self.tb_conf_entry.get() or 0.0)
+
+                # basic bounds
+                r  = max(1, min(200, r))
+                d  = max(0, min(1000, d))
+                cd = max(0, min(2000, cd))
+                cf = max(0.0, min(1.0, cf))
+
+                config.trigger_radius_px   = r
+                config.trigger_delay_ms    = d
+                config.trigger_cooldown_ms = cd
+                config.trigger_min_conf    = cf
+
+                # normalize UI
+                self.tb_radius_entry.delete(0, "end"); self.tb_radius_entry.insert(0, str(r))
+                self.tb_delay_entry.delete(0, "end");  self.tb_delay_entry.insert(0, str(d))
+                self.tb_cd_entry.delete(0, "end");     self.tb_cd_entry.insert(0, str(cd))
+                self.tb_conf_entry.delete(0, "end");   self.tb_conf_entry.insert(0, f"{cf:.2f}")
+
+                if hasattr(config, "save") and callable(config.save):
+                    config.save()
+            except Exception as e:
+                print(f"[WARN] Bad triggerbot param: {e}")
+                # revert to config
+                self.tb_radius_entry.delete(0,"end"); self.tb_radius_entry.insert(0, str(getattr(config, "trigger_radius_px", 8)))
+                self.tb_delay_entry.delete(0,"end");  self.tb_delay_entry.insert(0, str(getattr(config, "trigger_delay_ms", 30)))
+                self.tb_cd_entry.delete(0,"end");     self.tb_cd_entry.insert(0, str(getattr(config, "trigger_cooldown_ms", 120)))
+                self.tb_conf_entry.delete(0,"end");   self.tb_conf_entry.insert(0, f"{getattr(config, 'trigger_min_conf', 0.35):.2f}")
+
+        for w in (self.tb_radius_entry, self.tb_delay_entry, self.tb_cd_entry, self.tb_conf_entry):
+            w.bind("<Return>", _commit_tb_numbers)
+            w.bind("<FocusOut>", _commit_tb_numbers)
+
+        self._update_trigger_widgets_state()
 
     def build_detection_settings(self, parent, row):
         """Enhanced detection settings with better layout"""
@@ -371,22 +654,32 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         settings_frame = ctk.CTkFrame(frame, fg_color="transparent")
         settings_frame.grid(row=1, column=0, sticky="ew", padx=15, pady=(0, 15))
         settings_frame.grid_columnconfigure(1, weight=1)
+
+        # Aim always on (toggle under Smoothing)
+        self.always_on_switch = ctk.CTkSwitch(
+            settings_frame,
+            text="Aim always on",
+            variable=self.always_on_var,
+            command=self.on_always_on_toggle,
+            text_color="#fff"
+        )
+        self.always_on_switch.grid(row=0, column=0, columnspan=3, sticky="w", pady=(8, 5))
         
         # FOV Size
         ctk.CTkLabel(settings_frame, text="FOV Size", font=("Segoe UI", 12, "bold"), text_color="#fff")\
-            .grid(row=0, column=0, sticky="w", pady=5)
+            .grid(row=1, column=0, sticky="w", pady=5)
 
         self.fov_slider = ctk.CTkSlider(
             settings_frame, from_=20, to=500, command=self.update_fov, number_of_steps=180
         )
-        self.fov_slider.grid(row=0, column=1, sticky="ew", padx=(10, 5), pady=5)
+        self.fov_slider.grid(row=1, column=1, sticky="ew", padx=(10, 5), pady=5)
 
         # Manual entry box (replaces the label)
         self.fov_entry = ctk.CTkEntry(
             settings_frame, width=70, justify="center",
             font=("Segoe UI", 12, "bold"), text_color=NEON
         )
-        self.fov_entry.grid(row=0, column=2, pady=5)
+        self.fov_entry.grid(row=1, column=2, pady=5)
         self.fov_entry.insert(0, str(config.region_size))
 
         # Commit on Enter or focus-out
@@ -397,25 +690,26 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self._updating_fov = False
 
         # Player Y Offset
-        ctk.CTkLabel(settings_frame, text="Y Offset", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=1, column=0, sticky="w", pady=5)
+        ctk.CTkLabel(settings_frame, text="Y Offset", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=2, column=0, sticky="w", pady=5)
         self.offset_slider = ctk.CTkSlider(settings_frame, from_=0, to=20, command=self.update_offset, number_of_steps=20)
-        self.offset_slider.grid(row=1, column=1, sticky="ew", padx=(10, 5), pady=5)
+        self.offset_slider.grid(row=2, column=1, sticky="ew", padx=(10, 5), pady=5)
         self.offset_value = ctk.CTkLabel(settings_frame, text=str(config.player_y_offset), font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
-        self.offset_value.grid(row=1, column=2, pady=5)
+        self.offset_value.grid(row=2, column=2, pady=5)
         
         # Sensitivity
-        ctk.CTkLabel(settings_frame, text="Smoothing", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=2, column=0, sticky="w", pady=5)
-        self.in_game_sens_slider = ctk.CTkSlider(settings_frame, from_=0.1, to=8, number_of_steps=79, command=self.update_in_game_sens)
-        self.in_game_sens_slider.grid(row=2, column=1, sticky="ew", padx=(10, 5), pady=5)
+        ctk.CTkLabel(settings_frame, text="Smoothing", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=3, column=0, sticky="w", pady=5)
+        self.in_game_sens_slider = ctk.CTkSlider(settings_frame, from_=0.1, to=20, number_of_steps=199, command=self.update_in_game_sens)
+        self.in_game_sens_slider.grid(row=3, column=1, sticky="ew", padx=(10, 5), pady=5)
         self.in_game_sens_value = ctk.CTkLabel(settings_frame, text=f"{config.in_game_sens:.2f}", font=("Segoe UI", 12, "bold"), text_color=NEON, width=50)
-        self.in_game_sens_value.grid(row=2, column=2, pady=5)
+        self.in_game_sens_value.grid(row=3, column=2, pady=5)
+
         
         # Mouse Button Selection
-        ctk.CTkLabel(settings_frame, text="Activation Key:", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=3, column=0, sticky="nw", pady=(10, 5))
+        ctk.CTkLabel(settings_frame, text="Aim Key:", font=("Segoe UI", 12, "bold"), text_color="#fff").grid(row=4, column=0, sticky="nw", pady=(10, 5))
         
         self.btn_var = ctk.IntVar(value=config.selected_mouse_button)
         btn_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
-        btn_frame.grid(row=3, column=1, columnspan=2, sticky="ew", pady=(10, 5))
+        btn_frame.grid(row=4, column=1, columnspan=2, sticky="ew", pady=(10, 5))
         
         for i, txt in enumerate(["Left", "Right", "Middle", "Side 4", "Side 5"]):
             ctk.CTkRadioButton(btn_frame, text=txt, variable=self.btn_var, value=i, command=self.update_mouse_btn, text_color="#fff").pack(side="left", padx=8)
@@ -510,10 +804,6 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         neon_button(btn_frame, text="🎯 START AIMBOT", command=self.start_aimbot, width=150, height=45, font=("Segoe UI", 14, "bold")).pack(side="left", padx=(0, 15))
         ctk.CTkButton(btn_frame, text="⏹ STOP", command=self.stop_aimbot, width=100, height=45, fg_color="#333", font=("Segoe UI", 14, "bold")).pack(side="left")
 
-    def build_footer(self):
-        """Footer with credits"""
-        footer = ctk.CTkFrame(self.main_frame, fg_color="transparent", height=40)
-        footer.grid(row=2, column=0, sticky="ew", pady=(10, 0))
     def build_footer(self):
         """Footer with credits"""
         footer = ctk.CTkFrame(self.main_frame, fg_color="transparent", height=40)
@@ -624,6 +914,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self._set_entry_text(self.conf_entry, f"{config.conf:.2f}")
         self.in_game_sens_slider.set(config.in_game_sens)
         self.in_game_sens_value.configure(text=f"{config.in_game_sens:.2f}")
+        self.always_on_var.set(bool(getattr(config, "always_on_aim", False)))
         self.imgsz_slider.set(config.imgsz)
         self._set_entry_text(self.imgsz_entry, str(config.imgsz))
         self.max_detect_slider.set(config.max_detect)
@@ -632,9 +923,69 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.update_dynamic_frame()
         self.debug_checkbox_var.set(config.show_debug_window)
         self.input_check_var.set(False)
+        self.button_mask_var.set(bool(getattr(config, "button_mask", False)))
         self.capture_mode_var.set(config.capturer_mode.upper())
         self.capture_mode_menu.set(config.capturer_mode.upper())
+        self.trigger_enabled_var.set(bool(getattr(config, "trigger_enabled", False)))
+        self.trigger_always_on_var.set(bool(getattr(config, "trigger_always_on", False)))
+        self.trigger_btn_var.set(int(getattr(config, "trigger_button", 0)))
 
+        try:
+            self.tb_radius_entry.delete(0,"end"); self.tb_radius_entry.insert(0, str(config.trigger_radius_px))
+            self.tb_delay_entry.delete(0,"end");  self.tb_delay_entry.insert(0, str(config.trigger_delay_ms))
+            self.tb_cd_entry.delete(0,"end");     self.tb_cd_entry.insert(0, str(config.trigger_cooldown_ms))
+            self.tb_conf_entry.delete(0,"end");   self.tb_conf_entry.insert(0, f"{config.trigger_min_conf:.2f}")
+            self._update_trigger_widgets_state()
+        except Exception:
+            pass  
+
+        # NDI source menu initial state
+        try:
+            self.ndi_source_menu.configure(values=self._ndi_menu_values())
+            if isinstance(config.ndi_selected_source, str) and \
+            config.ndi_selected_source in self._ndi_menu_values():
+                self.ndi_source_var.set(config.ndi_selected_source)
+            elif self._ndi_menu_values():
+                self.ndi_source_var.set(self._ndi_menu_values()[0])
+        except Exception:
+            pass
+
+        self._update_ndi_controls_state()
+
+        # Main PC resolution entries
+        try:
+            self.main_res_w_entry.delete(0, "end"); self.main_res_w_entry.insert(0, str(config.main_pc_width))
+            self.main_res_h_entry.delete(0, "end"); self.main_res_h_entry.insert(0, str(config.main_pc_height))
+        except Exception:
+            pass
+
+
+    def on_capture_mode_change(self, value: str):
+        m = {"MSS": "mss", "NDI": "ndi"}
+        internal = m.get((value or "").upper(), "mss")
+        if config.capturer_mode != internal:
+            config.capturer_mode = internal
+            self.error_text.set(f"🔁 Capture method set to: {value}")
+            self._update_ndi_controls_state()  # <-- ensure UI updates immediately
+            if is_aimbot_running():
+                stop_aimbot(); start_aimbot()
+            config.save()
+        else:
+            # still refresh UI if same value selected
+            self._update_ndi_controls_state()
+
+    def on_ndi_source_change(self, value: str):
+        if self.capture_mode_var.get().upper() != "NDI":
+            return
+        if value and not value.startswith("("):
+            config.ndi_selected_source = value
+            self.ndi_source_var.set(value)
+            try:
+                self.ndi_source_menu.set(value)
+            except Exception:
+                pass
+            self.error_text.set(f"🔁 NDI source: {value}")
+            config.save()
 
     def update_fov(self, val):
         """Called by the slider."""
@@ -668,6 +1019,40 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         finally:
             self._updating_fov = False
 
+    def on_trigger_enabled_toggle(self):
+        config.trigger_enabled = bool(self.trigger_enabled_var.get())
+        self._update_trigger_widgets_state()
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save trigger_enabled: {e}")
+
+    def on_trigger_always_on_toggle(self):
+        config.trigger_always_on = bool(self.trigger_always_on_var.get())
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save trigger_always_on: {e}")
+
+    def update_trigger_button(self):
+        config.trigger_button = int(self.trigger_btn_var.get())
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save trigger_button: {e}")
+
+    def _update_trigger_widgets_state(self):
+        state = "normal" if self.trigger_enabled_var.get() else "disabled"
+        try:
+            self.tb_radius_entry.configure(state=state)
+            self.tb_delay_entry.configure(state=state)
+            self.tb_cd_entry.configure(state=state)
+            self.tb_conf_entry.configure(state=state)
+        except Exception:
+            pass
 
     def update_offset(self, val):
         config.player_y_offset = int(round(val))
@@ -721,14 +1106,6 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         entry.delete(0, "end")
         entry.insert(0, text)
 
-    def on_capture_mode_change(self, value: str):
-        m = {"MSS": "mss", "NDI": "ndi"}
-        internal = m.get((value or "").upper(), "mss")
-        if config.capturer_mode != internal:
-            config.capturer_mode = internal
-            self.error_text.set(f"🔁 Capture method set to: {value}")
-            if is_aimbot_running():
-                stop_aimbot(); start_aimbot()
 
     def update_imgsz(self, val):
         """Called by the slider."""
@@ -776,6 +1153,15 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         val = int(round(float(val)))
         config.max_detect = val
         self.max_detect_label.configure(text=str(val))
+
+    def on_always_on_toggle(self):
+        value = bool(self.always_on_var.get())
+        config.always_on_aim = value
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save config.always_on_aim: {e}")
 
     def update_in_game_sens(self, val):
         config.in_game_sens = round(float(val), 2)
@@ -980,7 +1366,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
                     if "time" in param_key.lower():
                         text = f"{float(val):.3f}s"
                         if param_key == "smooth_reaction_max":
-                            config.smooth_reaction_min = float(val) * 0.3
+                            config.smooth_reaction_min = float(val) * 0.7
                     elif "step" in param_key.lower():
                         text = f"{float(val):.0f}px"
                     else:
@@ -1071,13 +1457,21 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             self.show_input_check_window()
         else:
             self.hide_input_check_window()
+    def on_button_mask_toggle(self):
+        value = bool(self.button_mask_var.get())
+        config.button_mask = value
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save config.button_mask: {e}")
 
     def show_input_check_window(self):
         if hasattr(self, 'input_check_window') and self.input_check_window is not None:
             return
         self.input_check_window = ctk.CTkToplevel(self)
         self.input_check_window.title("Button States Monitor")
-        self.input_check_window.geometry("280x200")
+        self.input_check_window.geometry("320x240")
         self.input_check_window.resizable(False, False)
         self.input_check_window.configure(fg_color="#181818")
         

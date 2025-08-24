@@ -10,6 +10,7 @@ import os
 import math
 import cv2
 import queue
+import random
 
 # --- Global state for aimbot control ---
 _aimbot_running = False
@@ -20,6 +21,8 @@ fps = 0
 frame_queue = queue.Queue(maxsize=1)
 smooth_move_queue = queue.Queue(maxsize=10)  # Queue for smooth movements
 makcu = None  # <-- Declare Mouse instance globally, will be initialized once
+_last_trigger_time_ms = 0.0
+_in_zone_since_ms = 0.0
 
 def smooth_movement_loop():
     """
@@ -51,27 +54,44 @@ def smooth_movement_loop():
 
     print("[INFO] Smooth movement thread stopped")
 
+def _now_ms():
+    return time.perf_counter() * 1000.0
+
 def capture_loop():
     """PRODUCER: This loop runs on a dedicated CPU thread."""
-    camera, _ = get_camera()  # Create camera instance inside the thread
+    camera, _ = get_camera()
+    last_selected = None
+
     while _aimbot_running:
         try:
+            try:
+                config.ndi_sources = camera.list_sources()
+            except Exception:
+                config.ndi_sources = []
+
+            if config.capturer_mode.lower() == "ndi":
+                desired = config.ndi_selected_source
+
+                if isinstance(desired, str) and desired in config.ndi_sources:
+                    if (desired != last_selected) or not camera.connected:
+                        camera.select_source(desired)
+                        last_selected = desired
+                # else: do nothing (no auto-connect)
+
             image = camera.get_latest_frame()
             if image is not None:
                 try:
                     frame_queue.put(image, block=False)
                 except queue.Full:
-                    try:
-                        frame_queue.get_nowait()  # Drop old frame
-                    except queue.Empty:
-                        pass
-                    try:
-                        frame_queue.put(image, block=False)
-                    except queue.Full:
-                        pass  # Extremely rare, ignore
+                    try: frame_queue.get_nowait()
+                    except queue.Empty: pass
+                    try: frame_queue.put(image, block=False)
+                    except queue.Full: pass
+
         except Exception as e:
             print(f"[ERROR] Capture loop failed: {e}")
-            time.sleep(1)  # Prevent spamming errors
+            time.sleep(1)
+
     try:
         camera.stop()
     except Exception as e:
@@ -101,14 +121,19 @@ def detection_and_aim_loop():
             crosshair_x = config.screen_width // 2
             crosshair_y = config.screen_height // 2
         else:
-            region_left = (config.screen_width - config.ndi_widht) // 2
-            region_top  = (config.screen_height - config.ndi_height) // 2
-            crosshair_x = config.screen_width // 2
-            crosshair_y = config.screen_height // 2
+            region_left = (config.main_pc_width - config.ndi_width) // 2
+            region_top  = (config.main_pc_height - config.ndi_height) // 2
+            crosshair_x = config.main_pc_width // 2
+            crosshair_y = config.main_pc_height // 2
+        if config.button_mask:
+            Mouse.mask_manager_tick(selected_idx=config.selected_mouse_button, aimbot_running=is_aimbot_running())
+            Mouse.mask_manager_tick(selected_idx=config.trigger_button, aimbot_running=is_aimbot_running())
+        else:
+            Mouse.mask_manager_tick(selected_idx=config.selected_mouse_button, aimbot_running=False)
+            Mouse.mask_manager_tick(selected_idx=config.trigger_button, aimbot_running=False)
+
         
         all_targets = []
-        if config.capturer_mode.lower() == "ndi":
-            image = cv2.resize(image, (config.ndi_widht, config.ndi_height))
         debug_image = image.copy() if config.show_debug_window else None
         detected_classes = set()  # Track what classes are being detected
 
@@ -186,7 +211,7 @@ def detection_and_aim_loop():
                         if config.capturer_mode.lower() == "mss":
                             dist = math.hypot(center_x - (config.region_size / 2), center_y - (config.region_size / 2))
                         else:
-                            dist = math.hypot(center_x - (config.ndi_widht / 2), center_y - (config.ndi_height / 2))
+                            dist = math.hypot(center_x - (config.ndi_width / 2), center_y - (config.ndi_height / 2))
                         all_targets.append({
                             'dist': dist, 
                             'center_x': center_x, 
@@ -252,6 +277,65 @@ def detection_and_aim_loop():
                 
                 path = smooth_aimer.calculate_smooth_path(dx, dy, config)
 
+                # Add all movements to the smooth movement queue
+                movements_added = 0
+                for move_dx, move_dy, delay in path:
+                    if not smooth_move_queue.full():
+                        smooth_move_queue.put((move_dx, move_dy, delay))
+                        movements_added += 1
+                        if movements_added <= 5:  # Only print first few to avoid spam
+                            print(f"[DEBUG] Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}")
+                    else:
+                        # If queue is full, clear it and add this movement
+                        print("[DEBUG] Queue full, clearing and adding movement")
+                        try:
+                            while not smooth_move_queue.empty():
+                                smooth_move_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                        smooth_move_queue.put((move_dx, move_dy, delay))
+                        movements_added += 1
+                        break
+
+                print(f"[DEBUG] Added {movements_added} movements to queue")
+
+                # Fallback: if no smooth movements generated, use direct movement
+                if len(path) == 0:
+                    print("[DEBUG] No smooth path generated, using direct movement")
+                    makcu.move(dx, dy)
+
+        elif all_targets and config.always_on_aim:
+            best_target = min(all_targets, key=lambda t: t['dist'])
+
+            target_screen_x = region_left + best_target['center_x']
+            target_screen_y = region_top + best_target['center_y']
+
+            dx = target_screen_x - crosshair_x
+            dy = target_screen_y - crosshair_y
+
+            # Apply im-game-sensitivity scaling
+            sens = config.in_game_sens
+            distance = 1.07437623 * math.pow(sens, -0.9936827126)
+            # Apply distance scaling
+            dx *= distance
+            dy *= distance
+
+
+           
+            if config.mode == "normal":
+                # Apply x,y speeds scaling
+                dx *= config.normal_x_speed
+                dy *= config.normal_y_speed
+                makcu.move(dx, dy)
+            elif config.mode == "bezier":
+                makcu.move_bezier(dx, dy, config.bezier_segments, config.bezier_ctrl_x, config.bezier_ctrl_y)
+            elif config.mode == "silent":
+                makcu.move_bezier(dx, dy, config.silent_segments, config.silent_ctrl_x, config.silent_ctrl_y)
+            elif config.mode == "smooth":
+                # Use smooth aiming with WindMouse algorithm
+                
+                path = smooth_aimer.calculate_smooth_path(dx, dy, config)
+
 
 
                 # Add all movements to the smooth movement queue
@@ -260,7 +344,7 @@ def detection_and_aim_loop():
                     if not smooth_move_queue.full():
                         smooth_move_queue.put((move_dx, move_dy, delay))
                         movements_added += 1
-                        if movements_added <= 3:  # Only print first few to avoid spam
+                        if movements_added <= 5:  # Only print first few to avoid spam
                             print(f"[DEBUG] Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}")
                     else:
                         # If queue is full, clear it and add this movement
@@ -283,7 +367,51 @@ def detection_and_aim_loop():
         else:
             # Reset fatigue when not aiming
             smooth_aimer.reset_fatigue()
+        try:
+            if getattr(config, "trigger_enabled", False):
+                trigger_active = bool(getattr(config, "trigger_always_on", False))
+                if not trigger_active:
+                    # respect dedicated trigger hotkey
+                    trigger_btn_idx = int(getattr(config, "trigger_button", 0))
+                    trigger_active = is_button_pressed(trigger_btn_idx)
 
+                # only evaluate when active
+                if trigger_active and all_targets:
+                    min_conf    = float(getattr(config, "trigger_min_conf", 0.35))
+                    radius_px   = int(getattr(config, "trigger_radius_px", 8))
+                    delay_ms = int(getattr(config, "trigger_delay_ms", 30) * random.uniform(0.8, 1.2))
+                    cooldown_ms = int(getattr(config, "trigger_cooldown_ms", 120) * random.uniform(0.8, 1.2))
+
+                    # candidates: within radius and above confidence
+                    candidates = [t for t in all_targets
+                                if (t['conf'] >= min_conf and t['dist'] <= radius_px)]
+
+                    now = _now_ms()
+                    global _in_zone_since_ms, _last_trigger_time_ms
+
+                    if candidates:
+                        if _in_zone_since_ms == 0.0:
+                            _in_zone_since_ms = now
+
+                        linger_ok = (now - _in_zone_since_ms) >= delay_ms
+                        cooldown_ok = (now - _last_trigger_time_ms) >= cooldown_ms
+
+                        if linger_ok and cooldown_ok:
+                            try:
+                                # Single click via MAKCU
+                                makcu.click()
+                            except Exception as e:
+                                print(f"[WARN] Trigger click failed: {e}")
+                            _last_trigger_time_ms = now
+                            _in_zone_since_ms = 0.0  
+                    else:
+                        _in_zone_since_ms = 0.0
+                else:
+                    _in_zone_since_ms = 0.0
+        except Exception as e:
+            print(f"[ERROR] Triggerbot block: {e}")
+
+            
         # --- Debug Window Display ---
         if debug_image is not None:
             # Add overlays (same as before)
@@ -313,7 +441,7 @@ def detection_and_aim_loop():
             if config.capturer_mode.lower() == "mss":
                 center = (config.region_size // 2, config.region_size // 2)
             else:
-                center = (config.ndi_widht // 2, config.ndi_height // 2)
+                center = (config.ndi_width // 2, config.ndi_height // 2)
 
             cv2.drawMarker(debug_image, center, (255, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
@@ -342,6 +470,9 @@ def detection_and_aim_loop():
 
 def start_aimbot():
     global _aimbot_running, _aimbot_thread, _capture_thread, _smooth_thread, makcu
+    global _last_trigger_time_ms, _in_zone_since_ms
+    _last_trigger_time_ms = 0.0
+    _in_zone_since_ms = 0.0
     if _aimbot_running:
         return
     try:
@@ -352,7 +483,6 @@ def start_aimbot():
         print(f"[ERROR] Failed to cleanup Mouse instance: {e}")
 
     _aimbot_running = True
-
     # Start capture thread
     _capture_thread = threading.Thread(target=capture_loop, daemon=True)
     _capture_thread.start()
@@ -370,8 +500,12 @@ def start_aimbot():
     print(f"[INFO] Aimbot started in {config.mode} mode. Hold {button_name} button to aim.")
 
 def stop_aimbot():
-    global _aimbot_running
+    global _aimbot_running, _last_trigger_time_ms, _in_zone_since_ms
     _aimbot_running = False
+    _last_trigger_time_ms = 0.0
+    _in_zone_since_ms = 0.0
+    Mouse.mask_manager_tick(selected_idx=config.selected_mouse_button, aimbot_running=False)
+    Mouse.mask_manager_tick(selected_idx=config.trigger_button, aimbot_running=False)
     try:
         if makcu is None:  # <-- Initialize only once
             Mouse.cleanup()

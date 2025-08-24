@@ -167,35 +167,52 @@ def connect_to_makcu():
     return False
 
 
-
 def count_bits(n: int) -> int:
     return bin(n).count("1")
 
 def listen_makcu():
     global last_value
+    # start from a clean state
+    last_value = 0
+    with button_states_lock:
+        for i in range(5):
+            button_states[i] = False
+
     while is_connected:
         try:
-            if makcu.in_waiting == 0:
-                time.sleep(0.001)
-                continue
-            b = makcu.read(1)
+            b = makcu.read(1)  # blocking read (uses port timeout)
             if not b:
                 continue
+
             v = b[0]
-            if v > 31 or (v != 0 and count_bits(v) != 1):
+
+            # Ignore echoed ASCII (including CR/LF). Only 0..31 are valid masks.
+            if v in (0x0A, 0x0D) or v > 31:
                 continue
-            pressed = (v ^ last_value) & v
-            released = (v ^ last_value) & last_value
-            with button_states_lock:
-                for i in range(5):
-                    if pressed == (1 << i):
-                        button_states[i] = True
-                    elif released == (1 << i):
-                        button_states[i] = False
-            last_value = v
+
+            # v is a 5-bit mask (bit0..bit4). Update only changed bits.
+            changed = last_value ^ v
+            if changed:
+                with button_states_lock:
+                    for i in range(5):
+                        m = 1 << i
+                        if changed & m:
+                            button_states[i] = bool(v & m)
+                last_value = v
+
         except serial.SerialException as e:
             print(f"[ERROR] Listener serial exception: {e}")
             break
+        except Exception as e:
+            # swallow transient errors but keep running
+            print(f"[WARN] Listener error: {e}")
+            time.sleep(0.001)
+
+    # ensure clean state on exit
+    with button_states_lock:
+        for i in range(5):
+            button_states[i] = False
+    last_value = 0
 
 def is_button_pressed(idx: int) -> bool:
     with button_states_lock:
@@ -206,6 +223,83 @@ def test_move():
         with makcu_lock:
             makcu.write(b"km.move(100,100)\r")
             makcu.flush()
+
+# --------------------------------------------------------------------
+# Button Lock / Masking helpers
+# --------------------------------------------------------------------
+
+# Index mapping: 0=L, 1=R, 2=M, 3=S4, 4=S5
+_LOCK_CMD_BY_IDX = {
+    0: "lock_ml",
+    1: "lock_mr",
+    2: "lock_mm",
+    3: "lock_ms1",
+    4: "lock_ms2",
+}
+
+# State tracked by mask manager (so we only send lock/unlock when needed)
+_mask_applied_idx = None
+
+def _send_cmd_no_wait(cmd: str):
+    """Send 'km.<cmd>\\r' without waiting for response (listener ignores ASCII)."""
+    if not is_connected:
+        return
+    with makcu_lock:
+        makcu.write(f"km.{cmd}\r".encode("ascii", "ignore"))
+        makcu.flush()
+
+def lock_button_idx(idx: int):
+    """Lock a single button by index (0..4)."""
+    cmd = _LOCK_CMD_BY_IDX.get(idx)
+    if cmd is None:
+        return
+    _send_cmd_no_wait(f"{cmd}(1)")
+
+def unlock_button_idx(idx: int):
+    """Unlock a single button by index (0..4)."""
+    cmd = _LOCK_CMD_BY_IDX.get(idx)
+    if cmd is None:
+        return
+    _send_cmd_no_wait(f"{cmd}(0)")
+
+def unlock_all_locks():
+    """Best-effort unlock of all lockable buttons."""
+    for i in range(5):
+        unlock_button_idx(i)
+
+def mask_manager_tick(selected_idx: int, aimbot_running: bool):
+    """Manage button locks based on selected_idx and aimbot_running state."""
+    
+    global _mask_applied_idx
+
+    if not is_connected:
+        _mask_applied_idx = None
+        return
+
+    # clamp invalid index
+    if not isinstance(selected_idx, int) or not (0 <= selected_idx <= 4):
+        selected_idx = None
+
+    if not aimbot_running:
+        if _mask_applied_idx is not None:
+            unlock_button_idx(_mask_applied_idx)
+            _mask_applied_idx = None
+        return
+
+    # running: apply lock for selected_idx
+    if selected_idx is None:
+        # nothing selected -> make sure nothing is locked
+        if _mask_applied_idx is not None:
+            unlock_button_idx(_mask_applied_idx)
+            _mask_applied_idx = None
+        return
+
+    if _mask_applied_idx != selected_idx:
+        # switch lock to a new button
+        if _mask_applied_idx is not None:
+            unlock_button_idx(_mask_applied_idx)
+        lock_button_idx(selected_idx)
+        _mask_applied_idx = selected_idx
 
 class Mouse:
     _instance = None
@@ -248,8 +342,20 @@ class Mouse:
             makcu.flush()
 
     @staticmethod
+    def mask_manager_tick(selected_idx: int, aimbot_running: bool):
+        """Static wrapper so callers can do: Mouse.mask_manager_tick(idx, running)."""
+        mask_manager_tick(selected_idx, aimbot_running)
+
+    @staticmethod
     def cleanup():
-        global is_connected, makcu
+        global is_connected, makcu, _mask_applied_idx
+        # Always release any locks before closing port
+        try:
+            unlock_all_locks()
+        except Exception:
+            pass
+        _mask_applied_idx = None
+
         is_connected = False
         if makcu and makcu.is_open:
             makcu.close()

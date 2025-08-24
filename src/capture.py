@@ -36,7 +36,7 @@ class MSSCamera:
     def get_latest_frame(self):
         img = np.array(self.sct.grab(self.monitor))
         if img.shape[2] == 4:
-            img = img[:, :, :3]  # Drop alpha channel
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
         return img
 
     def stop(self):
@@ -52,38 +52,170 @@ class NDICamera:
 
         self.receiver = Receiver(
             color_format=RecvColorFormat.RGBX_RGBA,
-            bandwidth=RecvBandwidth.lowest,
+            bandwidth=RecvBandwidth.highest,
         )
         self.video_frame = VideoFrameSync()
         self.audio_frame = AudioFrameSync()
-
         self.receiver.frame_sync.set_video_frame(self.video_frame)
         self.receiver.frame_sync.set_audio_frame(self.audio_frame)
 
+        # --------------------------------------------------------------
+
+        self.available_sources = []     
+        self.desired_source_name = None
+        self._pending_index = None
+        self._pending_connect = False
+        self._last_connect_try = 0.0
+        self._retry_interval = 0.5
+        # ---------------------------------------------------------------
+
         self.connected = False
+        self._source_name = None
+        self._size_checked = False
+        self._allowed_sizes = {128,160,192,224,256,288,320,352,384,416,448,480,512,544,576,608,640}
+
+        # prime the initial list so select_source(0) works immediately
+        try:
+            self.available_sources = self.finder.get_source_names() or []
+        except Exception:
+            self.available_sources = []
+
+    def select_source(self, name_or_index):
+        # guard against early calls
+        if self.available_sources is None:
+            self.available_sources = []
+
+        self._pending_connect = True
+        if isinstance(name_or_index, int):
+            self._pending_index = name_or_index
+            if 0 <= name_or_index < len(self.available_sources):
+                self.desired_source_name = self.available_sources[name_or_index]
+            else:
+                print(f"[NDI] Will connect to index {name_or_index} when sources are ready.")
+                return
+        else:
+            self.desired_source_name = str(name_or_index)
+
+        if self.desired_source_name in self.available_sources:
+            self._try_connect_throttled()
 
     def on_finder_change(self):
-        sources = self.finder.get_source_names()
-        print("[NDI] Found sources:", sources)
-        if sources and not self.connected:
-            self.connect_to_source(sources[0])
+        self.available_sources = self.finder.get_source_names() or []
+        print("[NDI] Found sources:", self.available_sources)
+
+        if self._pending_index is not None and 0 <= self._pending_index < len(self.available_sources):
+            self.desired_source_name = self.available_sources[self._pending_index]
+
+        if self._pending_connect and not self.connected and self.desired_source_name in self.available_sources:
+            self._try_connect_throttled()
+
+    def _try_connect_throttled(self):
+        now = time.time()
+        if now - self._last_connect_try < self._retry_interval:
+            return
+        self._last_connect_try = now
+        if self.desired_source_name:
+            self.connect_to_source(self.desired_source_name)
+
 
     def connect_to_source(self, source_name):
-        with self.finder.notify:
-            source = self.finder.get_source(source_name)
+        source = self.finder.get_source(source_name)
+        if not source:
+            print(f"[NDI] Source '{source_name}' not available (get_source returned None).")
+            return
         self.receiver.set_source(source)
-        if source:
-            print(f"[NDI] Connected to {source.name}")
-            self.connected = True
+        self._source_name = source.name
+        print(f"[NDI] set_source -> {self._source_name}")
+        for _ in range(200):
+            if self.receiver.is_connected():
+                self.connected = True
+                self._pending_connect = False
+                print("[NDI] Receiver reports CONNECTED.")
+                break
+            time.sleep(0.01)
+        else:
+            print("[NDI] Timeout: receiver never reported connected.")
+            self.connected = False
+        self._size_checked = False
+
+    # ---- one-time size verdict logging ----
+    def _log_size_verdict_once(self, w, h):
+        if self._size_checked:
+            return
+        self._size_checked = True
+
+        name = self._source_name or "NDI Source"
+        if w == h and w in self._allowed_sizes:
+            print(f"[NDI] Source {name}: {w}x{h} ✔ allowed (no resize).")
+            return
+
+        target = min(w, h)
+        allowed = sorted(self._allowed_sizes)
+        down = max((s for s in allowed if s <= target), default=None)
+        up   = min((s for s in allowed if s >= target), default=None)
+        if down is None and up is None:
+            suggest = 640
+        elif down is None:
+            suggest = up
+        elif up is None:
+            suggest = down
+        else:
+            suggest = down if (target - down) <= (up - target) else up
+
+        if w != h:
+            print(
+                f"[NDI][FOV WARNING] Source {name}: input {w}x{h} is not square. "
+                f"Nearest allowed square: {suggest}x{suggest}. "
+                f"Consider a center crop to {suggest}x{suggest} for stable colors & model sizing."
+            )
+        else:
+            print(
+                f"[NDI][FOV WARNING] Source {name}: {w}x{h} not in allowed set. "
+                f"Nearest allowed: {suggest}x{suggest}. "
+                f"Consider a center ROI of {suggest}x{suggest} to avoid interpolation artifacts."
+            )
+    def list_sources(self, refresh=True):
+        """
+        Return a list of NDI source names. If refresh=True, query the Finder.
+        Never raises; always returns a list.
+        """
+        if refresh:
+            try:
+                self.available_sources = self.finder.get_source_names() or []
+            except Exception:
+                # keep whatever we had, but make sure it's a list
+                self.available_sources = self.available_sources or []
+        return list(self.available_sources)
+    
+    
+    def maintain_connection(self):
+        
+        if self.connected and not self.receiver.is_connected():
+            self.connected = False
+            self._pending_connect = True
+        # try reconnect if source is present
+        if self._pending_connect and self.desired_source_name in self.available_sources:
+            self._try_connect_throttled()
+
+    def switch_source(self, name_or_index):
+        self.connected = False
+        self._pending_connect = True
+        self.select_source(name_or_index)
 
     def get_latest_frame(self):
         if not self.receiver.is_connected():
+            time.sleep(0.002)
             return None
 
         self.receiver.frame_sync.capture_video()
         if min(self.video_frame.xres, self.video_frame.yres) == 0:
+            time.sleep(0.002)
             return None
-        config.ndi_widht, config.ndi_height = self.video_frame.xres, self.video_frame.yres
+        config.ndi_width, config.ndi_height = self.video_frame.xres, self.video_frame.yres
+
+        # one-time verdict/log about resolution
+        self._log_size_verdict_once(config.ndi_width, config.ndi_height)
+
         # Copy frame to own memory to avoid "cannot write with view active"
         frame = np.frombuffer(self.video_frame, dtype=np.uint8).copy()
         frame = frame.reshape((self.video_frame.yres, self.video_frame.xres, 4))
@@ -92,7 +224,15 @@ class NDICamera:
         return frame
 
     def stop(self):
-        self.finder.close()
+        try:
+            # detach first so sender-side frees up immediately
+            try: self.receiver.set_source(None)
+            except Exception: pass
+            self.finder.close()
+        except Exception as e:
+            print(f"[NDI] stop() error: {e}")
+
+
 
 
 def get_camera():

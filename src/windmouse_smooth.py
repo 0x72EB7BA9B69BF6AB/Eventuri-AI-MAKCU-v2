@@ -22,7 +22,9 @@ class WindMouse:
         current_x, current_y = float(start_x), float(start_y)
         velocity_x = velocity_y = wind_x = wind_y = 0.0
         path = []
-        
+        carry_x = 0.0
+        carry_y = 0.0
+        total_time = 0.0 
         # Debug print
         print(f"[DEBUG] WindMouse: Moving from ({start_x}, {start_y}) to ({dest_x}, {dest_y})")
         print(f"[DEBUG] WindMouse params: gravity={gravity}, wind={wind}, max_step={max_step}")
@@ -51,35 +53,42 @@ class WindMouse:
             velocity_y += wind_y + gravity_y
             
             # Apply drag/friction
-            velocity_x *= 0.99
-            velocity_y *= 0.99
+            velocity_x *= 0.995
+            velocity_y *= 0.995
             
             # Limit maximum step size
-            step_size = math.sqrt(velocity_x ** 2 + velocity_y ** 2)
+            step_size = math.hypot(velocity_x, velocity_y)
             if step_size > max_step:
-                velocity_x = (velocity_x / step_size) * max_step
-                velocity_y = (velocity_y / step_size) * max_step
+                scale = max_step / step_size
+                velocity_x *= scale
+                velocity_y *= scale
             
             # Calculate next position
             next_x = current_x + velocity_x
             next_y = current_y + velocity_y
-            
-            # Add some micro-corrections and overshooting
-            if distance < 50:
-                # Add slight randomness when close to target
-                next_x += (random.random() - 0.5) * 2
-                next_y += (random.random() - 0.5) * 2
+
             
             # Calculate delay for this step (human-like timing)
             delay = random.uniform(min_wait, max_wait)
+
+            carry_x += (next_x - current_x)
+            carry_y += (next_y - current_y)
+            out_dx = int(round(carry_x))
+            out_dy = int(round(carry_y))
+            carry_x -= out_dx
+            carry_y -= out_dy
             
             # Add to path
-            path.append((int(next_x - current_x), int(next_y - current_y), delay))
+            if out_dx != 0 or out_dy != 0:
+                path.append((out_dx, out_dy, delay))
             
             current_x, current_y = next_x, next_y
+            total_time += delay
             
             # Safety break to prevent infinite loops
             if len(path) > 200:  # Reduced from 500
+                break
+            if total_time > 0.35:  # ~350 ms budget for one path
                 break
                 
         print(f"[DEBUG] WindMouse generated {len(path)} movement steps")
@@ -121,9 +130,7 @@ class SmoothAiming:
             
         # Check if we're still in reaction delay
         if current_time - self.last_reaction_time < self.reaction_delay:
-            remaining_delay = self.reaction_delay - (current_time - self.last_reaction_time)
-            print(f"[DEBUG] SmoothAiming: Still in reaction delay, {remaining_delay:.3f}s remaining")
-            return [(0, 0, min(remaining_delay, 0.05))]  # Return small delay chunk
+            return []
         
         # Dynamic speed based on distance (closer = slower)
         if distance < config.smooth_close_range:
@@ -200,7 +207,9 @@ class SmoothAiming:
             else:
                 # Constant speed phase
                 multiplier = 1.0
-            
+
+            multiplier = max(multiplier, 0.6) # keep steps from collapsing too much
+
             # Apply micro-corrections and jitter
             if config.smooth_micro_corrections > 0 and random.random() < 0.1:
                 dx += random.randint(-config.smooth_micro_corrections, config.smooth_micro_corrections)
