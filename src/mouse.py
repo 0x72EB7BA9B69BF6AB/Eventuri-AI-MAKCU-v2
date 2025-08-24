@@ -338,7 +338,9 @@ class Mouse:
         if not is_connected:
             return
         with makcu_lock:
-            makcu.write(b"km.left(1)\r km.left(0)\r")
+            makcu.write(b"km.left(1)\r")
+            makcu.flush()
+            makcu.write(b"km.left(0)\r")
             makcu.flush()
 
     @staticmethod
