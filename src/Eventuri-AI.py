@@ -412,7 +412,6 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         # 2) Keep the selection sensible
         current = self.ndi_source_var.get()
         if current not in latest:
-            # Prefer persisted selection if still present
             if isinstance(config.ndi_selected_source, str) and config.ndi_selected_source in latest:
                 choice = config.ndi_selected_source
             else:
