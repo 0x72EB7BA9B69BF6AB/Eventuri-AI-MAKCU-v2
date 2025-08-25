@@ -281,7 +281,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             .grid(row=1, column=0, sticky="w", padx=15)
         self.capture_mode_var = ctk.StringVar(value=config.capturer_mode.upper())
         self.capture_mode_menu = ctk.CTkOptionMenu(
-            frame, values=["MSS", "NDI"], variable=self.capture_mode_var,
+            frame, values=["MSS", "NDI", "DXGI"], variable=self.capture_mode_var,
             command=self.on_capture_mode_change, width=110
         )
         self.capture_mode_menu.grid(row=1, column=1, sticky="w", padx=(5, 15), pady=10)
@@ -418,7 +418,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             else:
                 choice = latest[0]
 
-            # Update both the variable and the widget
+
             self.ndi_source_var.set(choice)
             try:
                 self.ndi_source_menu.set(choice)
@@ -429,6 +429,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
                 config.ndi_selected_source = choice
                 config.save()
 
+        # 3) Reflect enable/disable based on mode
         self._update_ndi_controls_state()
 
         # tick again
@@ -600,7 +601,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             .grid(row=1, column=0, sticky="w", pady=5)
 
         self.imgsz_slider = ctk.CTkSlider(
-            settings_frame, from_=128, to=1280, number_of_steps=18, command=self.update_imgsz
+            settings_frame, from_=128, to=1280, number_of_steps=36, command=self.update_imgsz
         )
         self.imgsz_slider.grid(row=1, column=1, sticky="ew", padx=(10, 5), pady=5)
         self.imgsz_slider.set(config.imgsz)
@@ -961,17 +962,16 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
 
 
     def on_capture_mode_change(self, value: str):
-        m = {"MSS": "mss", "NDI": "ndi"}
+        m = {"MSS": "mss", "NDI": "ndi", "DXGI": "dxgi"}  # <- add this key
         internal = m.get((value or "").upper(), "mss")
         if config.capturer_mode != internal:
             config.capturer_mode = internal
             self.error_text.set(f"🔁 Capture method set to: {value}")
-            self._update_ndi_controls_state()  # <-- ensure UI updates immediately
+            self._update_ndi_controls_state()
             if is_aimbot_running():
                 stop_aimbot(); start_aimbot()
             config.save()
         else:
-            # still refresh UI if same value selected
             self._update_ndi_controls_state()
 
     def on_ndi_source_change(self, value: str):
@@ -1134,7 +1134,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         return up if (value - down) >= (up - value) else down
 
     def _apply_imgsz(self, value, source="code"):
-        MIN_S, MAX_S = 320, 1280
+        MIN_S, MAX_S = 128, 1280
         value = max(MIN_S, min(MAX_S, int(value)))
         value = self._snap_to_multiple(value, base=32)
 

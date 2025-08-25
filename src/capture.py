@@ -2,6 +2,7 @@ import time
 import numpy as np
 import mss
 import cv2
+import dxcam
 from config import config
 
 # NDI imports
@@ -235,6 +236,39 @@ class NDICamera:
 
 
 
+
+class DXGICamera:
+    def __init__(self, region=None, target_fps=None):
+        self.region = region
+        self.camera = dxcam.create(output_idx=0, output_color="BGRA")  # stable default
+        # Use config.target_fps if available, else fallback
+        fps = int(getattr(config, "target_fps", 240) if target_fps is None else target_fps)
+        self.camera.start(target_fps=fps)  # <-- start the capture thread here
+        self.running = True
+
+    def get_latest_frame(self):
+        frame = self.camera.get_latest_frame()
+        if frame is None:
+            return None
+        # Convert BGRA -> BGR once
+        if frame.shape[2] == 4:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+        if self.region:
+            x1, y1, x2, y2 = self.region
+            frame = frame[y1:y2, x1:x2]
+        return frame
+
+    def stop(self):
+        self.running = False
+        try:
+            self.camera.stop()
+        except Exception:
+            pass
+
+
+
+
 def get_camera():
     """Factory function to return the right camera based on config."""
     if config.capturer_mode.lower() == "mss":
@@ -244,5 +278,9 @@ def get_camera():
     elif config.capturer_mode.lower() == "ndi":
         cam = NDICamera()
         return cam, None
+    elif config.capturer_mode.lower() == "dxgi":
+        region = get_region()
+        cam = DXGICamera(region)
+        return cam, region
     else:
         raise ValueError(f"Unknown capturer_mode: {config.capturer_mode}")

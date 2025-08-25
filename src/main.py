@@ -76,7 +76,6 @@ def capture_loop():
                     if (desired != last_selected) or not camera.connected:
                         camera.select_source(desired)
                         last_selected = desired
-                # else: do nothing (no auto-connect)
 
             image = camera.get_latest_frame()
             if image is not None:
@@ -390,6 +389,7 @@ def detection_and_aim_loop():
                     global _in_zone_since_ms, _last_trigger_time_ms
 
                     if candidates:
+                        
                         if _in_zone_since_ms == 0.0:
                             _in_zone_since_ms = now
 

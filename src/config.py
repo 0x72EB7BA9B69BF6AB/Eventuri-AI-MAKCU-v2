@@ -53,7 +53,7 @@ class Config:
         self.screen_width = w # Revert to original
         self.screen_height = h  # Revert to original
         self.player_y_offset = 5 # Offset for player detection
-        self.capturer_mode = "MSS"  # Default to MSS mode
+        self.capturer_mode = "NDI"  # Default to MSS mode
         self.always_on_aim = False
         self.main_pc_width = 1920  # Default width for main PC
         self.main_pc_height = 1080  # Default height for main PC
@@ -121,7 +121,7 @@ class Config:
         
         # Human-like behavior settings
         self.smooth_reaction_min = 0.05    # Min reaction time to new targets (seconds)
-        self.smooth_reaction_max = 0.15    # Max reaction time to new targets (seconds)
+        self.smooth_reaction_max = 0.21    # Max reaction time to new targets (seconds)
         self.smooth_close_range = 35       # Distance considered "close" (pixels)
         self.smooth_far_range = 250        # Distance considered "far" (pixels) 
         self.smooth_close_speed = 0.8      # Speed multiplier when close to target
