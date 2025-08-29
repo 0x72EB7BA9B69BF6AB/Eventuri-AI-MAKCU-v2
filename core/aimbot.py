@@ -1,11 +1,11 @@
 import numpy as np
 import time
 import threading
-from mouse import Mouse, is_button_pressed  # Use the thread-safe function
-from capture import get_camera
-from detection import load_model, perform_detection
-from config import config
-from windmouse_smooth import smooth_aimer
+from hardware.mouse import Mouse, is_button_pressed  # Use the thread-safe function
+from hardware.capture import get_camera
+from ai.detection import load_model, perform_detection
+from core.config import config
+from ai.smooth import smooth_aimer
 import os
 import math
 import cv2

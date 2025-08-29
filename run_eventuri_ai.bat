@@ -1,7 +1,7 @@
 @echo off
-cd /d "%~dp0src"
+cd /d "%~dp0"
 echo [*] Activating venv...
-call venv\Scripts\activate
+call src\venv\Scripts\activate
 echo [*] Starting Eventuri-AI...
-python Eventuri-AI.py
+python main.py
 pause

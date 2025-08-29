@@ -1,7 +1,11 @@
 import os
 import json
 import ctypes
-from ctypes import wintypes
+import platform
+
+# Only import wintypes on Windows
+if platform.system() == "Windows":
+    from ctypes import wintypes
 
 # Structures
 class RECT(ctypes.Structure):
@@ -21,6 +25,10 @@ class MONITORINFO(ctypes.Structure):
     ]
 
 def get_foreground_monitor_resolution():
+    # Only run on Windows
+    if platform.system() != "Windows":
+        return 1920, 1080  # Default resolution for non-Windows
+    
     # DPI awareness so we get actual pixels
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)

@@ -1,7 +1,7 @@
-from config import config
+from core.config import config
 import customtkinter as ctk
-from gui_constants import NEON, BG, neon_button
-from mouse import test_move  # Added import for test_move
+from gui.constants import NEON, BG, neon_button
+from hardware.mouse import test_move  # Added import for test_move
 
 class GUISections:
     def build_ui(self):

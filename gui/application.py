@@ -1,17 +1,17 @@
 import os
 import customtkinter as ctk
 from tkinter import messagebox
-from config import config
-from mouse import Mouse,connect_to_makcu, test_move
-import main
-from main import (
+from core.config import config
+from hardware.mouse import Mouse,connect_to_makcu, test_move
+import core.aimbot as aimbot
+from core.aimbot import (
     start_aimbot, stop_aimbot, is_aimbot_running,
     reload_model, get_model_classes, get_model_size
 )
 import glob
-from gui_sections import *
-from gui_callbacks import *
-from gui_constants import NEON, BG, neon_button
+from gui.sections import *
+from gui.callbacks import *
+from gui.constants import NEON, BG, neon_button
 
 ctk.set_appearance_mode("dark")
 

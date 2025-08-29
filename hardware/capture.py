@@ -3,7 +3,7 @@ import numpy as np
 import mss
 import cv2
 import dxcam
-from config import config
+from core.config import config
 
 # NDI imports
 from cyndilib.wrapper.ndi_recv import RecvColorFormat, RecvBandwidth
