@@ -25,8 +25,9 @@ ai/                     # 🤖 AI detection and algorithms
 └── smooth.py          # Smooth movement algorithms
 utils/                  # 🛠️ Utility scripts and setup
 ├── patch.py           # System patches
-├── setup_cuda.py      # CUDA setup
-└── setup_directml.py  # DirectML setup
+└── setup/             # Setup scripts directory
+    ├── setup_cuda.py      # CUDA setup
+    └── setup_directml.py  # DirectML setup
 models/                 # 📦 AI model files (.engine, .onnx, .pt)
 ```
 
