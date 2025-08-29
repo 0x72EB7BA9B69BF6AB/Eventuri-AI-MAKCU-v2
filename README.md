@@ -26,8 +26,8 @@ ai/                     # 🤖 AI detection and algorithms
 utils/                  # 🛠️ Utility scripts and setup
 ├── patch.py           # System patches
 └── setup/             # Setup scripts directory
-    ├── setup_cuda.py      # CUDA setup
-    └── setup_directml.py  # DirectML setup
+    ├── cuda.py      # CUDA setup
+    └── directml.py  # DirectML setup
 models/                 # 📦 AI model files (.engine, .onnx, .pt)
 ```
 
