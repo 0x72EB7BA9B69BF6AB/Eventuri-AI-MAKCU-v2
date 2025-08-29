@@ -1,9 +1,9 @@
-from config import config
+from core.config import config
 import customtkinter as ctk
 from tkinter import messagebox
-import main
-from main import start_aimbot, stop_aimbot, is_aimbot_running, reload_model, get_model_classes, get_model_size
-from mouse import connect_to_makcu, button_states, button_states_lock
+import core.aimbot as aimbot
+from core.aimbot import start_aimbot, stop_aimbot, is_aimbot_running, reload_model, get_model_classes, get_model_size
+from hardware.mouse import connect_to_makcu, button_states, button_states_lock
 import os
 import glob
 import cv2
