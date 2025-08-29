@@ -9,26 +9,25 @@ This project has been organized into a clean, modular structure:
 
 ```
 main.py                 # 🚀 Main orchestrator - start here!
-src/
-├── core/              # 🧠 Core aimbot logic and configuration
-│   ├── aimbot.py     # Main aimbot functionality
-│   └── config.py     # Configuration management
-├── gui/               # 🎨 User interface components
-│   ├── application.py # Main GUI application
-│   ├── sections.py   # GUI layout sections
-│   ├── callbacks.py  # Event handlers
-│   └── constants.py  # UI constants and styling
-├── hardware/          # 🔧 Hardware interaction
-│   ├── mouse.py      # Mouse/MAKCU communication
-│   └── capture.py    # Screen capture systems
-├── ai/               # 🤖 AI detection and algorithms
-│   ├── detection.py  # YOLO model loading and inference
-│   └── smooth.py     # Smooth movement algorithms
-├── utils/            # 🛠️ Utility scripts and setup
-│   ├── patch.py      # System patches
-│   ├── setup_cuda.py # CUDA setup
-│   └── setup_directml.py # DirectML setup
-└── models/           # 📦 AI model files (.engine, .onnx, .pt)
+core/                   # 🧠 Core aimbot logic and configuration
+├── aimbot.py          # Main aimbot functionality
+└── config.py          # Configuration management
+gui/                    # 🎨 User interface components
+├── application.py     # Main GUI application
+├── sections.py        # GUI layout sections
+├── callbacks.py       # Event handlers
+└── constants.py       # UI constants and styling
+hardware/               # 🔧 Hardware interaction
+├── mouse.py           # Mouse/MAKCU communication
+└── capture.py         # Screen capture systems
+ai/                     # 🤖 AI detection and algorithms
+├── detection.py       # YOLO model loading and inference
+└── smooth.py          # Smooth movement algorithms
+utils/                  # 🛠️ Utility scripts and setup
+├── patch.py           # System patches
+├── setup_cuda.py      # CUDA setup
+└── setup_directml.py  # DirectML setup
+models/                 # 📦 AI model files (.engine, .onnx, .pt)
 ```
 
 ### Getting Started

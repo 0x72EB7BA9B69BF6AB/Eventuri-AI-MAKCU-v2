@@ -12,9 +12,6 @@ Author: Eventuri-AI Team
 import sys
 import os
 
-# Add src directory to Python path to allow imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
 def check_dependencies():
     """Check if all required dependencies are installed."""
     missing_deps = []
