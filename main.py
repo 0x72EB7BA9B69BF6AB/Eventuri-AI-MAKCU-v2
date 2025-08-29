@@ -15,18 +15,61 @@ import os
 # Add src directory to Python path to allow imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
+def check_dependencies():
+    """Check if all required dependencies are installed."""
+    missing_deps = []
+    
+    try:
+        import customtkinter
+    except ImportError:
+        missing_deps.append("customtkinter")
+    
+    try:
+        import ultralytics
+    except ImportError:
+        missing_deps.append("ultralytics")
+    
+    try:
+        import numpy
+    except ImportError:
+        missing_deps.append("numpy")
+        
+    try:
+        import cv2
+    except ImportError:
+        missing_deps.append("opencv-python")
+    
+    if missing_deps:
+        print("❌ Missing dependencies:")
+        for dep in missing_deps:
+            print(f"   - {dep}")
+        print("\n💡 Please install dependencies using:")
+        print("   pip install " + " ".join(missing_deps))
+        print("\n   Or run the setup scripts:")
+        print("   - install_setup_cuda.bat (for NVIDIA GPUs)")
+        print("   - install_setup_directml.bat (for AMD/Intel GPUs)")
+        return False
+    return True
+
 def main():
     """
     Main orchestrator function that starts the Eventuri-AI application.
     
     This function:
-    1. Initializes the core configuration
-    2. Sets up the AI detection system
-    3. Configures hardware connections
-    4. Launches the GUI application
+    1. Checks dependencies
+    2. Initializes the core configuration
+    3. Sets up the AI detection system
+    4. Configures hardware connections
+    5. Launches the GUI application
     """
     
     print("🚀 Starting Eventuri-AI for MAKCU v2...")
+    print("=" * 50)
+    
+    # Check dependencies first
+    if not check_dependencies():
+        input("\nPress Enter to exit...")
+        sys.exit(1)
     
     try:
         # Import core configuration
@@ -46,16 +89,22 @@ def main():
         from gui.application import EventuriGUI
         print("✅ GUI system loaded")
         
+        print("=" * 50)
         print("🎯 Launching Eventuri-AI GUI...")
+        print("💡 Use the GUI to configure and start the aimbot")
+        print("=" * 50)
+        
         app = EventuriGUI()
         app.mainloop()
         
     except ImportError as e:
         print(f"❌ Failed to import required modules: {e}")
         print("Please ensure all dependencies are installed.")
+        input("\nPress Enter to exit...")
         sys.exit(1)
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
+        input("\nPress Enter to exit...")
         sys.exit(1)
     
     print("👋 Eventuri-AI application closed.")

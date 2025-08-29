@@ -3,6 +3,43 @@
 The ultimate AI aimbot and detection GUI for Windows, supporting YOLOv8–v12 models and a range of USB serial devices.
 Made for the MAKCU community, with custom class selection for multiple games and super-smooth, modern UI.
 
+## 🏗️ Project Structure
+
+This project has been organized into a clean, modular structure:
+
+```
+main.py                 # 🚀 Main orchestrator - start here!
+src/
+├── core/              # 🧠 Core aimbot logic and configuration
+│   ├── aimbot.py     # Main aimbot functionality
+│   └── config.py     # Configuration management
+├── gui/               # 🎨 User interface components
+│   ├── application.py # Main GUI application
+│   ├── sections.py   # GUI layout sections
+│   ├── callbacks.py  # Event handlers
+│   └── constants.py  # UI constants and styling
+├── hardware/          # 🔧 Hardware interaction
+│   ├── mouse.py      # Mouse/MAKCU communication
+│   └── capture.py    # Screen capture systems
+├── ai/               # 🤖 AI detection and algorithms
+│   ├── detection.py  # YOLO model loading and inference
+│   └── smooth.py     # Smooth movement algorithms
+├── utils/            # 🛠️ Utility scripts and setup
+│   ├── patch.py      # System patches
+│   ├── setup_cuda.py # CUDA setup
+│   └── setup_directml.py # DirectML setup
+└── models/           # 📦 AI model files (.engine, .onnx, .pt)
+```
+
+### Getting Started
+Simply run: `python main.py` or use `run_eventuri_ai.bat`
+
+The main.py orchestrator will:
+1. Initialize core configuration
+2. Set up AI detection systems  
+3. Configure hardware connections
+4. Launch the GUI application
+
 ---
 ## Disclamer
 This program is intended to be used as a 2pc setup.
