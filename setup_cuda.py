@@ -28,15 +28,23 @@ if os.path.isfile(REQUIREMENTS):
     print(f"[*] Installing from {REQUIREMENTS}...")
     subprocess.check_call([venv_python, "-m", "pip", "install", "-r", REQUIREMENTS])
 else:
+    # Step 1: Install torch, torchvision, torchaudio with custom index
+    print("[*] Installing torch, torchvision, torchaudio with CUDA from PyTorch index...")
+    subprocess.check_call([
+        venv_python, "-m", "pip", "install",
+        "torch", "torchvision", "torchaudio",
+        "--index-url", "https://download.pytorch.org/whl/cu126"
+    ])
+    # Step 2: Install remaining packages
     packages = [
         "customtkinter", "opencv-python", "pyserial", "mss", "ultralytics",
-        "onnx", "onnxruntime-directml", "cyndilib", "dxcam"
+        "tensorrt==10.11.0.33", "onnx", "onnxruntime-directml", "cyndilib", "dxcam"
     ]
     print(f"[*] {REQUIREMENTS} not found. Installing default packages: {packages}")
     subprocess.check_call([venv_python, "-m", "pip", "install"] + packages)
 
 # 5. Run patch.py using the venv's Python
-patch_script = os.path.join(os.path.dirname(__file__), "..", "patch.py")
+patch_script = "patch.py"
 if os.path.exists(patch_script):
     print(f"[*] Running patch.py...")
     subprocess.check_call([venv_python, patch_script])
