@@ -102,7 +102,7 @@ class GUICallbacks:
         config.aim_humanization = val
 
     def poll_fps(self):
-        self.fps_var.set(f"FPS: {main.fps:.1f}")
+        self.fps_var.set(f"FPS: {aimbot.fps:.1f}")
         
         # Update aimbot status
         self.aimbot_status.set("Running" if is_aimbot_running() else "Stopped")

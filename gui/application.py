@@ -1167,7 +1167,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.in_game_sens_value.configure(text=f"{config.in_game_sens:.2f}")
 
     def poll_fps(self):
-        self.fps_var.set(f"FPS: {main.fps:.1f}")
+        self.fps_var.set(f"FPS: {aimbot.fps:.1f}")
         self.aimbot_status.set("Running" if is_aimbot_running() else "Stopped")
         self.after(200, self.poll_fps)
 
