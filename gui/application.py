@@ -1355,20 +1355,25 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         f.grid_columnconfigure(1, weight=1)
         
         # Title
-        ctk.CTkLabel(f, text="🌪️ WindMouse Smooth Aim", font=("Segoe UI", 14, "bold"), text_color="#00e676").grid(row=0, column=0, columnspan=3, pady=(10, 10), padx=10, sticky="w")
+        ctk.CTkLabel(f, text="🌪️ WindMouse Smooth Aim", font=("Segoe UI", 14, "bold"), text_color="#00e676").grid(row=0, column=0, columnspan=4, pady=(10, 10), padx=10, sticky="w")
         
-        # Core parameters
+        # Core parameters with tooltips
         params = [
-            ("Gravity:", "smooth_gravity", 1, 20, 19),
-            ("Wind:", "smooth_wind", 1, 20, 19),
-            ("Close Speed:", "smooth_close_speed", 0.1, 1.0, 18),
-            ("Far Speed:", "smooth_far_speed", 0.1, 1.0, 18),
-            ("Reaction Time:", "smooth_reaction_max", 0.01, 0.3, 29),
-            ("Max Step:", "smooth_max_step", 5, 50, 45)
+            ("Gravity:", "smooth_gravity", 1, 20, 19, "How strongly the aim pulls toward the target. Bigger number = faster snap, smaller = slower glide."),
+            ("Wind:", "smooth_wind", 1, 20, 19, "How much random wobble or shake the aim has. Bigger number = shakier movement."),
+            ("Close Speed:", "smooth_close_speed", 0.1, 1.0, 18, "How slowly it moves when it's very close to the target. Lower = more precise stop."),
+            ("Far Speed:", "smooth_far_speed", 0.1, 1.0, 18, "How fast it moves when it's far away from the target. Higher = quicker movement across the screen."),
+            ("Reaction Time:", "smooth_reaction_max", 0.01, 0.3, 29, "A short delay before moving, to mimic human reaction. Higher = slower to start."),
+            ("Max Step:", "smooth_max_step", 5, 50, 45, "The biggest jump the cursor can take in one move. Lower = smoother but slower, higher = faster but less smooth.")
         ]
         
-        for i, (label, key, min_val, max_val, steps) in enumerate(params):
-            ctk.CTkLabel(f, text=label, text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=i+1, column=0, sticky="w", padx=10, pady=2)
+        for i, (label, key, min_val, max_val, steps, tooltip) in enumerate(params):
+            # Create frame for label and info button
+            label_frame = ctk.CTkFrame(f, fg_color="transparent")
+            label_frame.grid(row=i+1, column=0, sticky="ew", padx=10, pady=2)
+            
+            ctk.CTkLabel(label_frame, text=label, text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+            create_info_button(label_frame, tooltip).pack(side="left", padx=(5, 0))
             
             slider = ctk.CTkSlider(f, from_=min_val, to=max_val, number_of_steps=steps)
             slider.set(getattr(config, key))
@@ -1402,7 +1407,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         
         # Presets
         preset_frame = ctk.CTkFrame(f, fg_color="#1a1a1a", corner_radius=8)
-        preset_frame.grid(row=len(params)+1, column=0, columnspan=3, sticky="ew", padx=10, pady=(10, 10))
+        preset_frame.grid(row=len(params)+1, column=0, columnspan=4, sticky="ew", padx=10, pady=(10, 10))
         
         ctk.CTkLabel(preset_frame, text="Quick Presets:", font=("Segoe UI", 11, "bold"), text_color="#ccc").pack(pady=(8, 5))
         
