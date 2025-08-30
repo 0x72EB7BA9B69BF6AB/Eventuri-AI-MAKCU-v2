@@ -145,6 +145,10 @@ class Config:
 
         # --- Debug window toggle ---
         self.show_debug_window = False
+        
+        # --- Debug logging level ---
+        # 0 = ERROR only, 1 = WARN+, 2 = INFO+ (default), 3 = DEBUG (verbose)
+        self.debug_level = 2
 
         # --- Ndi Settings ---
         self.ndi_width = 0
