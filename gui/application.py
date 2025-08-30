@@ -54,6 +54,7 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.model_size = ctk.StringVar(value="")
         self.aim_humanize_var = ctk.BooleanVar(value=bool(config.aim_humanization))
         self.debug_checkbox_var = ctk.BooleanVar(value=False)
+        self.debug_level_var = ctk.StringVar(value="INFO")  # ERROR, WARN, INFO, DEBUG
         self.input_check_var = ctk.BooleanVar(value=False)
         self.button_mask_var = ctk.BooleanVar(value=bool(getattr(config, "button_mask", False)))
         self._building = True
@@ -349,7 +350,21 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
             frame, text="Debug Window", variable=self.debug_checkbox_var,
             command=self.on_debug_toggle, text_color="#fff"
         )
-        self.debug_checkbox.grid(row=4, column=0, sticky="w", padx=15, pady=(5, 15))
+        self.debug_checkbox.grid(row=4, column=0, sticky="w", padx=15, pady=(5, 5))
+        
+        # Debug verbosity level dropdown
+        debug_level_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        debug_level_frame.grid(row=4, column=1, sticky="w", padx=15, pady=(5, 15))
+        
+        ctk.CTkLabel(debug_level_frame, text="Verbosity:", text_color="#fff").pack(side="left", padx=(0, 5))
+        self.debug_level_menu = ctk.CTkOptionMenu(
+            debug_level_frame,
+            values=["ERROR", "WARN", "INFO", "DEBUG"],
+            variable=self.debug_level_var,
+            command=self.on_debug_level_change,
+            width=80
+        )
+        self.debug_level_menu.pack(side="left")
 
         # Initial enable/disable state
         self._update_ndi_controls_state()
@@ -922,6 +937,16 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
         self.load_class_list()
         self.update_dynamic_frame()
         self.debug_checkbox_var.set(config.show_debug_window)
+        
+        # Set debug level dropdown
+        level_names = {0: "ERROR", 1: "WARN", 2: "INFO", 3: "DEBUG"}
+        debug_level_name = level_names.get(getattr(config, "debug_level", 2), "INFO")
+        self.debug_level_var.set(debug_level_name)
+        try:
+            self.debug_level_menu.set(debug_level_name)
+        except AttributeError:
+            pass  # Menu might not be built yet
+        
         self.input_check_var.set(False)
         self.button_mask_var.set(bool(getattr(config, "button_mask", False)))
         self.capture_mode_var.set(config.capturer_mode.upper())
@@ -1457,6 +1482,25 @@ class EventuriGUI(ctk.CTk, GUISections, GUICallbacks):
                     cv2.waitKey(1)
                 except Exception:
                     pass
+
+    def on_debug_level_change(self, level_str):
+        """Update debug level when user changes dropdown"""
+        level_map = {"ERROR": 0, "WARN": 1, "INFO": 2, "DEBUG": 3}
+        config.debug_level = level_map.get(level_str, 2)
+        
+        # Update the logger immediately 
+        try:
+            from utils.debug_logger import set_debug_level
+            set_debug_level(config.debug_level)
+        except ImportError:
+            pass
+            
+        # Save config
+        try:
+            if hasattr(config, "save") and callable(config.save):
+                config.save()
+        except Exception as e:
+            print(f"[WARN] Failed to save config.debug_level: {e}")
 
     def on_input_check_toggle(self):
         if self.input_check_var.get():
