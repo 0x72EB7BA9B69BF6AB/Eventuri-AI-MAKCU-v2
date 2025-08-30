@@ -1,5 +1,5 @@
 @echo off
 cd /d "%~dp0"
 echo [*] Creating venv and installing dependencies...
-python utils/setup/directml.py
+python setup_directml.py
 pause
