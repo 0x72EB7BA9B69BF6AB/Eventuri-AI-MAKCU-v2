@@ -36,7 +36,7 @@ else:
     subprocess.check_call([venv_python, "-m", "pip", "install"] + packages)
 
 # 5. Run patch.py using the venv's Python
-patch_script = "patch.py"
+patch_script = "utils/patch.py"
 if os.path.exists(patch_script):
     print(f"[*] Running patch.py...")
     subprocess.check_call([venv_python, patch_script])
