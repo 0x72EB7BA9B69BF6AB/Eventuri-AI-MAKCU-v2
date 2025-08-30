@@ -1,6 +1,7 @@
 from core.config import config
 import customtkinter as ctk
 from gui.constants import NEON, BG, neon_button
+from gui.tooltip import create_info_button
 from hardware.mouse import test_move  # Added import for test_move
 
 class GUISections:
@@ -309,7 +310,15 @@ class GUISections:
         title.grid(row=0, column=0, columnspan=4, pady=(8, 12), sticky="w", padx=6)
         
         # Core WindMouse parameters
-        ctk.CTkLabel(f, text="Gravity:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=1, column=0, sticky="w", padx=6)
+        # Gravity parameter with info tooltip
+        gravity_frame = ctk.CTkFrame(f, fg_color="transparent")
+        gravity_frame.grid(row=1, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(gravity_frame, text="Gravity:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            gravity_frame,
+            "How strongly the aim pulls toward the target. Bigger number = faster snap, smaller = slower glide."
+        ).pack(side="left", padx=(5, 0))
+        
         gravity_slider = ctk.CTkSlider(f, from_=1, to=20, number_of_steps=19)
         gravity_slider.set(config.smooth_gravity)
         gravity_slider.grid(row=1, column=1, padx=2, sticky="ew")
@@ -320,7 +329,15 @@ class GUISections:
             gravity_label.configure(text=f"{float(v):.1f}")
         gravity_slider.configure(command=update_gravity)
         
-        ctk.CTkLabel(f, text="Wind:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=2, column=0, sticky="w", padx=6)
+        # Wind parameter with info tooltip
+        wind_frame = ctk.CTkFrame(f, fg_color="transparent")
+        wind_frame.grid(row=2, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(wind_frame, text="Wind:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            wind_frame,
+            "How much random wobble or shake the aim has. Bigger number = shakier movement."
+        ).pack(side="left", padx=(5, 0))
+        
         wind_slider = ctk.CTkSlider(f, from_=1, to=20, number_of_steps=19)
         wind_slider.set(config.smooth_wind)
         wind_slider.grid(row=2, column=1, padx=2, sticky="ew")
@@ -332,7 +349,15 @@ class GUISections:
         wind_slider.configure(command=update_wind)
         
         # Speed settings
-        ctk.CTkLabel(f, text="Close Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=3, column=0, sticky="w", padx=6)
+        # Close Speed parameter with info tooltip
+        close_speed_frame = ctk.CTkFrame(f, fg_color="transparent")
+        close_speed_frame.grid(row=3, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(close_speed_frame, text="Close Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            close_speed_frame,
+            "How slowly it moves when it's very close to the target. Lower = more precise stop."
+        ).pack(side="left", padx=(5, 0))
+        
         close_speed_slider = ctk.CTkSlider(f, from_=0.1, to=2.0, number_of_steps=36)
         close_speed_slider.set(config.smooth_close_speed)
         close_speed_slider.grid(row=3, column=1, padx=2, sticky="ew")
@@ -343,7 +368,15 @@ class GUISections:
             close_speed_label.configure(text=f"{float(v):.2f}")
         close_speed_slider.configure(command=update_close_speed)
         
-        ctk.CTkLabel(f, text="Far Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=4, column=0, sticky="w", padx=6)
+        # Far Speed parameter with info tooltip
+        far_speed_frame = ctk.CTkFrame(f, fg_color="transparent")
+        far_speed_frame.grid(row=4, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(far_speed_frame, text="Far Speed:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            far_speed_frame,
+            "How fast it moves when it's far away from the target. Higher = quicker movement across the screen."
+        ).pack(side="left", padx=(5, 0))
+        
         far_speed_slider = ctk.CTkSlider(f, from_=0.1, to=2.0, number_of_steps=36)
         far_speed_slider.set(config.smooth_far_speed)
         far_speed_slider.grid(row=4, column=1, padx=2, sticky="ew")
@@ -354,8 +387,15 @@ class GUISections:
             far_speed_label.configure(text=f"{float(v):.2f}")
         far_speed_slider.configure(command=update_far_speed)
         
-        # Reaction time
-        ctk.CTkLabel(f, text="Reaction Time:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=5, column=0, sticky="w", padx=6)
+        # Reaction time parameter with info tooltip
+        reaction_frame = ctk.CTkFrame(f, fg_color="transparent")
+        reaction_frame.grid(row=5, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(reaction_frame, text="Reaction Time:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            reaction_frame,
+            "A short delay before moving, to mimic human reaction. Higher = slower to start."
+        ).pack(side="left", padx=(5, 0))
+        
         reaction_slider = ctk.CTkSlider(f, from_=0.01, to=0.3, number_of_steps=29)
         reaction_slider.set(config.smooth_reaction_max)
         reaction_slider.grid(row=5, column=1, padx=2, sticky="ew")
@@ -367,8 +407,15 @@ class GUISections:
             reaction_label.configure(text=f"{float(v):.3f}s")
         reaction_slider.configure(command=update_reaction)
         
-        # Max step size
-        ctk.CTkLabel(f, text="Max Step:", text_color="#fff", font=("Segoe UI", 11, "bold")).grid(row=6, column=0, sticky="w", padx=6)
+        # Max step size parameter with info tooltip
+        step_frame = ctk.CTkFrame(f, fg_color="transparent")
+        step_frame.grid(row=6, column=0, sticky="ew", padx=6)
+        ctk.CTkLabel(step_frame, text="Max Step:", text_color="#fff", font=("Segoe UI", 11, "bold")).pack(side="left")
+        create_info_button(
+            step_frame,
+            "The biggest jump the cursor can take in one move. Lower = smoother but slower, higher = faster but less smooth."
+        ).pack(side="left", padx=(5, 0))
+        
         step_slider = ctk.CTkSlider(f, from_=5, to=50, number_of_steps=45)
         step_slider.set(config.smooth_max_step)
         step_slider.grid(row=6, column=1, padx=2, sticky="ew")
