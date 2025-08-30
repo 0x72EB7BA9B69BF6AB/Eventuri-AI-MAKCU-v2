@@ -246,10 +246,18 @@ class GUICallbacks:
     def on_debug_toggle(self):
         config.show_debug_window = self.debug_checkbox_var.get()
         if not config.show_debug_window:
+            # Import and use the thread-safe cleanup function
             try:
-                cv2.destroyWindow("AI Debug")
-            except Exception:
-                pass
+                from core.aimbot import _cleanup_debug_window
+                _cleanup_debug_window()
+            except ImportError:
+                # Fallback to direct CV2 cleanup if import fails
+                try:
+                    import cv2
+                    cv2.destroyWindow("AI Debug")
+                    cv2.waitKey(1)
+                except Exception:
+                    pass
 
     def on_input_check_toggle(self):
         if self.input_check_var.get():

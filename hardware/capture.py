@@ -2,15 +2,31 @@ import time
 import numpy as np
 import mss
 import cv2
-import dxcam
+import platform
 from core.config import config
 
-# NDI imports
-from cyndilib.wrapper.ndi_recv import RecvColorFormat, RecvBandwidth
-from cyndilib.finder import Finder
-from cyndilib.receiver import Receiver
-from cyndilib.video_frame import VideoFrameSync
-from cyndilib.audio_frame import AudioFrameSync
+# Platform-aware imports
+if platform.system() == "Windows":
+    try:
+        import dxcam
+    except ImportError:
+        dxcam = None
+else:
+    dxcam = None
+
+# NDI imports - also platform aware
+try:
+    from cyndilib.wrapper.ndi_recv import RecvColorFormat, RecvBandwidth
+    from cyndilib.finder import Finder
+    from cyndilib.receiver import Receiver
+    from cyndilib.video_frame import VideoFrameSync
+    from cyndilib.audio_frame import AudioFrameSync
+    NDI_AVAILABLE = True
+except ImportError:
+    # NDI not available on this platform
+    NDI_AVAILABLE = False
+    RecvColorFormat = RecvBandwidth = Finder = Receiver = None
+    VideoFrameSync = AudioFrameSync = None
 
 
 def get_region():
@@ -47,6 +63,15 @@ class MSSCamera:
 
 class NDICamera:
     def __init__(self):
+        self.finder = None
+        self.receiver = None
+        self.video_frame = None
+        self.audio_frame = None
+        self.connected = False
+        
+        if not NDI_AVAILABLE:
+            return
+            
         self.finder = Finder()
         self.finder.set_change_callback(self.on_finder_change)
         self.finder.open()
@@ -77,11 +102,16 @@ class NDICamera:
 
         # prime the initial list so select_source(0) works immediately
         try:
-            self.available_sources = self.finder.get_source_names() or []
+            if self.finder is not None:
+                self.available_sources = self.finder.get_source_names() or []
+            else:
+                self.available_sources = []
         except Exception:
             self.available_sources = []
 
     def select_source(self, name_or_index):
+        if not NDI_AVAILABLE:
+            return
         # guard against early calls
         if self.available_sources is None:
             self.available_sources = []
@@ -101,6 +131,8 @@ class NDICamera:
             self._try_connect_throttled()
 
     def on_finder_change(self):
+        if not NDI_AVAILABLE or self.finder is None:
+            return
         self.available_sources = self.finder.get_source_names() or []
         print("[NDI] Found sources:", self.available_sources)
 
@@ -240,13 +272,17 @@ class NDICamera:
 class DXGICamera:
     def __init__(self, region=None, target_fps=None):
         self.region = region
-        self.camera = dxcam.create(output_idx=0, output_color="BGRA")  # stable default
-        # Use config.target_fps if available, else fallback
-        fps = int(getattr(config, "target_fps", 240) if target_fps is None else target_fps)
-        self.camera.start(target_fps=fps)  # <-- start the capture thread here
+        self.camera = None
+        if dxcam is not None:
+            self.camera = dxcam.create(output_idx=0, output_color="BGRA")  # stable default
+            # Use config.target_fps if available, else fallback
+            fps = int(getattr(config, "target_fps", 240) if target_fps is None else target_fps)
+            self.camera.start(target_fps=fps)  # <-- start the capture thread here
         self.running = True
 
     def get_latest_frame(self):
+        if self.camera is None:
+            return None
         frame = self.camera.get_latest_frame()
         if frame is None:
             return None
@@ -261,10 +297,11 @@ class DXGICamera:
 
     def stop(self):
         self.running = False
-        try:
-            self.camera.stop()
-        except Exception:
-            pass
+        if self.camera is not None:
+            try:
+                self.camera.stop()
+            except Exception:
+                pass
 
 
 
