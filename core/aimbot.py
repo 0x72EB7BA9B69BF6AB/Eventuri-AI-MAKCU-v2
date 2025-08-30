@@ -6,7 +6,6 @@ from hardware.capture import get_camera
 from ai.detection import load_model, perform_detection
 from core.config import config
 from ai.smooth import smooth_aimer
-from utils.debug_logger import log_error, log_warn, log_info, log_debug, set_debug_level
 import os
 import math
 import cv2
@@ -35,12 +34,13 @@ def smooth_movement_loop():
     This ensures movements are executed with precise timing.
     """
     global _aimbot_running, makcu
-    log_info("Smooth movement thread started")
+    print("[INFO] Smooth movement thread started")
     while _aimbot_running:
         try:
             # Get next movement from queue (blocking with timeout)
             move_data = smooth_move_queue.get(timeout=0.1)
             dx, dy, delay = move_data
+
 
             # Execute the movement
             makcu.move(dx, dy)
@@ -53,10 +53,10 @@ def smooth_movement_loop():
             # No movements in queue, continue
             continue
         except Exception as e:
-            log_error(f"Smooth movement failed: {e}")
+            print(f"[ERROR] Smooth movement failed: {e}")
             time.sleep(0.01)
 
-    log_info("Smooth movement thread stopped")
+    print("[INFO] Smooth movement thread stopped")
 
 def _now_ms():
     return time.perf_counter() * 1000.0
@@ -92,14 +92,14 @@ def capture_loop():
                     except queue.Full: pass
 
         except Exception as e:
-            log_error(f"Capture loop failed: {e}")
+            print(f"[ERROR] Capture loop failed: {e}")
             time.sleep(1)
 
     try:
         camera.stop()
     except Exception as e:
-        log_error(f"Camera stop failed: {e}")
-    log_info("Capture loop stopped.")
+        print(f"[ERROR] Camera stop failed: {e}")
+    print("[INFO] Capture loop stopped.")
 
 def detection_and_aim_loop():
     """CONSUMER: This loop runs on the main aimbot thread, utilizing the GPU."""
@@ -116,7 +116,7 @@ def detection_and_aim_loop():
         try:
             image = frame_queue.get(timeout=1)
         except queue.Empty:
-            log_warn("Frame queue is empty. Capture thread may have stalled.", limit_spam=True)
+            print("[WARN] Frame queue is empty. Capture thread may have stalled.")
             continue
         if config.capturer_mode.lower() == "mss":
             region_left = (config.screen_width - config.region_size) // 2
@@ -149,7 +149,7 @@ def detection_and_aim_loop():
                 for box in result.boxes:
                     coords = [val.item() for val in box.xyxy[0]]
                     if any(math.isnan(c) for c in coords):
-                        log_warn(f"Skipping box with NaN coords: {coords}", limit_spam=True)
+                        print("[WARN] Skipping box with NaN coords:", coords)
                         continue
 
                     x1, y1, x2, y2 = [int(c) for c in coords]
@@ -194,12 +194,12 @@ def detection_and_aim_loop():
                         if not player_label_str.isdigit() and player_label_str.lower() in class_name_str.lower():
                             is_target = True
                             target_type = "player"
-                            log_debug(f"Partial match for player: '{class_name}' contains '{player_label}'", limit_spam=True)
+                            print(f"[DEBUG] Partial match for player: '{class_name}' contains '{player_label}'")
                     elif head_label_str and len(head_label_str) > 1:  # Only for non-numeric
                         if not head_label_str.isdigit() and head_label_str.lower() in class_name_str.lower():
                             is_target = True
                             target_type = "head"
-                            log_debug(f"Partial match for head: '{class_name}' contains '{head_label}'", limit_spam=True)
+                            print(f"[DEBUG] Partial match for head: '{class_name}' contains '{head_label}'")
 
                     if is_target:
                         center_x = (x1 + x2) / 2
@@ -287,10 +287,10 @@ def detection_and_aim_loop():
                         smooth_move_queue.put((move_dx, move_dy, delay))
                         movements_added += 1
                         if movements_added <= 5:  # Only print first few to avoid spam
-                            log_debug(f"Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}", limit_spam=True)
+                            print(f"[DEBUG] Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}")
                     else:
                         # If queue is full, clear it and add this movement
-                        log_debug("Queue full, clearing and adding movement", limit_spam=True)
+                        print("[DEBUG] Queue full, clearing and adding movement")
                         try:
                             while not smooth_move_queue.empty():
                                 smooth_move_queue.get_nowait()
@@ -300,11 +300,11 @@ def detection_and_aim_loop():
                         movements_added += 1
                         break
 
-                log_debug(f"Added {movements_added} movements to queue", limit_spam=True)
+                print(f"[DEBUG] Added {movements_added} movements to queue")
 
                 # Fallback: if no smooth movements generated, use direct movement
                 if len(path) == 0:
-                    log_debug("No smooth path generated, using direct movement", limit_spam=True)
+                    print("[DEBUG] No smooth path generated, using direct movement")
                     makcu.move(dx, dy)
 
         elif all_targets and config.always_on_aim:
@@ -348,10 +348,10 @@ def detection_and_aim_loop():
                         smooth_move_queue.put((move_dx, move_dy, delay))
                         movements_added += 1
                         if movements_added <= 5:  # Only print first few to avoid spam
-                            log_debug(f"Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}", limit_spam=True)
+                            print(f"[DEBUG] Added movement: ({move_dx}, {move_dy}) with delay {delay:.3f}")
                     else:
                         # If queue is full, clear it and add this movement
-                        log_debug("Queue full, clearing and adding movement", limit_spam=True)
+                        print("[DEBUG] Queue full, clearing and adding movement")
                         try:
                             while not smooth_move_queue.empty():
                                 smooth_move_queue.get_nowait()
@@ -361,11 +361,11 @@ def detection_and_aim_loop():
                         movements_added += 1
                         break
 
-                log_debug(f"Added {movements_added} movements to queue", limit_spam=True)
+                print(f"[DEBUG] Added {movements_added} movements to queue")
 
                 # Fallback: if no smooth movements generated, use direct movement
                 if len(path) == 0:
-                    log_debug("No smooth path generated, using direct movement", limit_spam=True)
+                    print("[DEBUG] No smooth path generated, using direct movement")
                     makcu.move(dx, dy)
         else:
             # Reset fatigue when not aiming
@@ -405,7 +405,7 @@ def detection_and_aim_loop():
                                 # Single click via MAKCU
                                 makcu.click()
                             except Exception as e:
-                                log_warn(f"Trigger click failed: {e}")
+                                print(f"[WARN] Trigger click failed: {e}")
                             _last_trigger_time_ms = now
                             _in_zone_since_ms = 0.0  
                     else:
@@ -413,7 +413,7 @@ def detection_and_aim_loop():
                 else:
                     _in_zone_since_ms = 0.0
         except Exception as e:
-            log_error(f"Triggerbot block: {e}")
+            print(f"[ERROR] Triggerbot block: {e}")
 
             
         # --- Debug Window Display ---
@@ -450,7 +450,24 @@ def detection_and_aim_loop():
             cv2.drawMarker(debug_image, center, (255, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
             # Thread-safe debug window display
-            _show_debug_window(debug_image)
+            with _debug_window_lock:
+                try:
+                    win_name = "AI Debug"
+                    cv2.imshow(win_name, debug_image)
+                    _debug_window_active = True
+                    
+                    # Calculate center position
+                    if not debug_window_moved:
+                        screen_w, screen_h = config.screen_width, config.screen_height
+                        win_w, win_h = debug_image.shape[1], debug_image.shape[0]
+                        x = (screen_w - win_w) // 2
+                        y = (screen_h - win_h) // 2
+                        cv2.moveWindow(win_name, x, y)
+                        debug_window_moved = True 
+                    
+                    cv2.waitKey(1)
+                except Exception as e:
+                    pass  # Ignore display errors
 
 
         # --- FPS Calculation ---
@@ -466,22 +483,14 @@ def start_aimbot():
     global _last_trigger_time_ms, _in_zone_since_ms
     _last_trigger_time_ms = 0.0
     _in_zone_since_ms = 0.0
-    
-    # Set debug level from config
-    set_debug_level(config.debug_level)
-    
     if _aimbot_running:
         return
-        
     try:
         if makcu is None:  # <-- Initialize only once
-            makcu = Mouse()
-        else:
-            # Cleanup existing instance before reinitializing
             Mouse.cleanup()
             makcu = Mouse()
     except Exception as e:
-        log_error(f"Failed to initialize Mouse instance: {e}")
+        print(f"[ERROR] Failed to cleanup Mouse instance: {e}")
 
     _aimbot_running = True
     # Start capture thread
@@ -498,26 +507,21 @@ def start_aimbot():
 
     button_names = ["Left", "Right", "Middle", "Side 4", "Side 5"]
     button_name = button_names[config.selected_mouse_button] if config.selected_mouse_button < len(button_names) else f"Button {config.selected_mouse_button}"
-    log_info(f"Aimbot started in {config.mode} mode. Hold {button_name} button to aim.")
+    print(f"[INFO] Aimbot started in {config.mode} mode. Hold {button_name} button to aim.")
 
 def stop_aimbot():
-    global _aimbot_running, _last_trigger_time_ms, _in_zone_since_ms, makcu, _debug_window_active
+    global _aimbot_running, _last_trigger_time_ms, _in_zone_since_ms, makcu
     _aimbot_running = False
     _last_trigger_time_ms = 0.0
     _in_zone_since_ms = 0.0
-    
-    # Set debug level from config
-    set_debug_level(config.debug_level)
-    
     Mouse.mask_manager_tick(selected_idx=config.selected_mouse_button, aimbot_running=False)
     Mouse.mask_manager_tick(selected_idx=config.trigger_button, aimbot_running=False)
     try:
-        if makcu is not None:  # <-- Only cleanup if instance exists
+        if makcu is not None:  # <-- Only cleanup if exists
             Mouse.cleanup()
             makcu = None
     except Exception as e:
-        log_error(f"Failed to cleanup Mouse instance: {e}")
-        
+        print(f"[ERROR] Failed to cleanup Mouse instance: {e}")
     # Clear the smooth movement queue
     try:
         while not smooth_move_queue.empty():
@@ -527,7 +531,7 @@ def stop_aimbot():
 
     # Thread-safe debug window cleanup
     _cleanup_debug_window()
-    log_info("Aimbot stopped.")
+    print("[INFO] Aimbot stopped.")
 
 def _cleanup_debug_window():
     """Thread-safe cleanup of debug window"""
@@ -539,45 +543,12 @@ def _cleanup_debug_window():
                 cv2.waitKey(1)  # Allow time for window destruction
                 _debug_window_active = False
             except Exception as e:
-                log_debug(f"Debug window cleanup warning: {e}", limit_spam=True)
+                pass  # Ignore cleanup errors
 
 def is_aimbot_running():
     return _aimbot_running
 
-def _show_debug_window(debug_image):
-    """Thread-safe debug window display"""
-    global _debug_window_active
-    with _debug_window_lock:
-        if config.show_debug_window:
-            try:
-                win_name = "AI Debug"
-                cv2.imshow(win_name, debug_image)
-                
-                if not _debug_window_active:
-                    # Calculate center position only once
-                    screen_w, screen_h = config.screen_width, config.screen_height
-                    win_w, win_h = debug_image.shape[1], debug_image.shape[0]
-                    x = (screen_w - win_w) // 2
-                    y = (screen_h - win_h) // 2
-                    cv2.moveWindow(win_name, x, y)
-                    _debug_window_active = True
-                    
-                cv2.waitKey(1)
-            except Exception as e:
-                log_debug(f"Debug window display error: {e}", limit_spam=True)
-
-def _cleanup_debug_window():
-    """Thread-safe cleanup of debug window"""
-    global _debug_window_active
-    with _debug_window_lock:
-        if _debug_window_active:
-            try:
-                cv2.destroyWindow("AI Debug")
-                cv2.waitKey(1)  # Allow time for window destruction
-                _debug_window_active = False
-            except Exception as e:
-                log_debug(f"Debug window cleanup warning: {e}", limit_spam=True)
-
+# Rest of the utility functions remain the same
 def reload_model(path=None):
     if path is None: path = config.model_path
     return load_model(path)
@@ -596,5 +567,5 @@ def get_model_size(path=None):
 
 __all__ = [
     'start_aimbot', 'stop_aimbot', 'is_aimbot_running', 'reload_model',
-    'get_model_classes', 'get_model_size', 'fps', '_cleanup_debug_window'
+    'get_model_classes', 'get_model_size', 'fps'
 ]
